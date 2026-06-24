@@ -1,0 +1,2045 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Suivi des Règlements - Pro Santé (Multi-Cabinets)</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        .page-hidden { display: none !important; }
+        input[type=number]::-webkit-inner-spin-button, 
+        input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+        
+        .table-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+        .table-scroll::-webkit-scrollbar-track { background: #f1f5f9; }
+        .table-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        .table-scroll::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800 font-sans antialiased relative">
+
+    <div id="ecran-login" class="ecran min-h-screen flex items-center justify-center bg-gray-100 z-[100] fixed inset-0">
+        <div class="bg-white p-8 rounded-xl shadow-xl max-w-sm w-full text-center">
+            <h2 class="text-2xl font-bold mb-6 text-teal-700">Connexion Administrateur</h2>
+            <input type="email" id="login-email" placeholder="Email principal" class="w-full p-3 mb-4 border rounded bg-gray-50 focus:ring-2 focus:ring-teal-500 outline-none">
+            <input type="password" id="login-password" placeholder="Mot de passe" class="w-full p-3 mb-6 border rounded bg-gray-50 focus:ring-2 focus:ring-teal-500 outline-none">
+            <button onclick="seConnecter()" class="w-full bg-teal-600 text-white font-bold py-3 rounded hover:bg-teal-700 transition shadow">Se connecter</button>
+        </div>
+    </div>
+
+    <div id="ecran-dashboard" class="ecran min-h-screen bg-gray-50 z-[90] fixed inset-0 overflow-y-auto hidden">
+        <div class="max-w-4xl mx-auto p-6 pt-12">
+            <div class="flex justify-between items-center bg-white p-5 rounded-xl shadow-sm mb-8 border border-gray-200">
+                <h2 class="text-2xl font-black text-gray-800">Mes Cabinets</h2>
+                <button onclick="deconnecterAdmin()" class="bg-rose-600 text-white px-5 py-2 rounded-lg font-bold hover:bg-rose-700 transition shadow-sm">Déconnexion</button>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12" id="liste-cabinets">
+                </div>
+
+            <div class="bg-white p-6 rounded-xl shadow-sm max-w-md mx-auto text-center border-t-4 border-teal-500">
+                <h3 class="font-bold text-gray-700 mb-4 text-lg">Ajouter un nouveau cabinet</h3>
+                <input type="text" id="nouveau-cabinet-nom" placeholder="Nom du cabinet (ex: Cabinet Centre)" class="w-full p-3 mb-3 border rounded focus:ring-2 focus:ring-teal-500 outline-none">
+                <input type="password" id="nouveau-cabinet-code" placeholder="Code secret (ex: 1234)" class="w-full p-3 mb-4 border rounded focus:ring-2 focus:ring-teal-500 outline-none">
+                <button onclick="creerCabinet()" class="w-full bg-teal-600 text-white font-bold py-3 rounded hover:bg-teal-700 transition shadow">Créer le cabinet</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-code" class="hidden fixed inset-0 z-[100] bg-gray-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-white p-6 rounded-xl shadow-2xl max-w-sm w-full text-center">
+            <h3 id="nom-cabinet-selectionne" class="text-xl font-black text-teal-700 mb-4">Cabinet</h3>
+            <p class="text-sm text-gray-500 mb-4">Veuillez saisir le code d'accès de ce cabinet.</p>
+            <input type="password" id="saisie-code-acces" placeholder="Code secret" class="w-full p-3 mb-4 border rounded text-center text-2xl tracking-widest focus:ring-2 focus:ring-teal-500 outline-none">
+            <button onclick="validerCode()" class="w-full bg-teal-600 text-white font-bold py-3 rounded hover:bg-teal-700 mb-3 shadow transition">Déverrouiller</button>
+            <button onclick="fermerModalCode()" class="w-full bg-gray-100 text-gray-700 font-bold py-2 rounded hover:bg-gray-200 transition">Annuler</button>
+        </div>
+    </div>
+
+    <div id="ecran-travail" class="hidden relative">
+        
+        <button onclick="retourDashboard()" class="fixed bottom-6 right-6 z-[60] bg-gray-800 text-white px-5 py-3 rounded-full shadow-xl font-bold hover:bg-gray-700 transition border-2 border-white flex items-center gap-2">
+            <span>⬅</span> Changer de cabinet
+        </button>
+
+        <header class="bg-teal-700 text-white shadow-md sticky top-0 z-40">
+            <div class="max-w-[1400px] mx-auto px-4 py-3 flex flex-wrap justify-between items-center gap-3">
+                <h1 class="text-xl font-bold flex items-center gap-4">
+                    <span>🩺 Suivi FSE & DRE</span>
+                    <div class="flex bg-teal-800 rounded-lg p-1 items-center overflow-x-auto">
+                        <button onclick="switchPage('dashboardPage')" id="navDashboard" class="px-3 py-1.5 text-sm font-semibold rounded bg-teal-600 text-white transition whitespace-nowrap">Factures</button>
+                        <button onclick="switchPage('noemiePage')" id="navNoemie" class="px-3 py-1.5 text-sm font-semibold rounded text-teal-200 hover:text-white hover:bg-teal-600/50 transition whitespace-nowrap">Retours NOEMIE</button>
+                        <button onclick="switchPage('retrosPage')" id="navRetros" class="px-3 py-1.5 text-sm font-semibold rounded text-teal-200 hover:text-white hover:bg-teal-600/50 transition whitespace-nowrap">Rétros</button>
+                        <button onclick="openImpayesModal()" class="px-3 py-1.5 text-sm font-semibold rounded text-rose-200 hover:text-white hover:bg-rose-600/50 transition bg-rose-700/50 ml-1 whitespace-nowrap">⚠️ Impayés</button>
+                    </div>
+                </h1>
+                <div class="flex flex-wrap items-center gap-2 md:gap-3">
+                    <button onclick="exportData()" title="Sauvegarder les données (.json)" class="bg-indigo-700 hover:bg-indigo-600 border border-indigo-500 text-white p-1.5 rounded transition shadow flex items-center justify-center">💾</button>
+                    <label title="Restaurer les données (.json)" class="bg-indigo-700 hover:bg-indigo-600 border border-indigo-500 text-white p-1.5 rounded transition shadow flex items-center justify-center cursor-pointer">
+                        📂<input type="file" id="fileInputRestore" accept=".json" class="hidden" onchange="importData(event)">
+                    </label>
+
+                    <button onclick="forceSyncNoemieToFse()" class="bg-indigo-100 hover:bg-indigo-200 text-indigo-700 font-bold py-1 px-3 rounded text-sm shadow flex items-center gap-2">
+                         🔄 Resynchroniser NOEMIE -> FSE
+                    </button>
+                    
+                    <div class="w-px h-6 bg-teal-500 mx-1"></div> 
+
+                    <select id="globalPraticienFilter" class="bg-teal-800 text-white border border-teal-600 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 font-semibold shadow-inner">
+                        <option value="ALL">👨‍⚕️ Tous les Praticiens</option>
+                    </select>
+
+                    <div class="flex items-center gap-1 bg-teal-800 border border-teal-600 rounded p-0.5">
+                        <select id="yearFilter" class="bg-teal-800 text-white rounded px-2 py-1 text-sm focus:outline-none font-semibold cursor-pointer">
+                            <option value="ALL">🗓️ Toutes années</option>
+                        </select>
+                        <button onclick="addCustomYear()" title="Ajouter une année" class="text-teal-200 hover:text-white hover:bg-teal-700 px-2 py-1 rounded transition text-sm font-bold">+</button>
+                    </div>
+
+                    <select id="monthFilter" class="bg-teal-800 text-white border border-teal-600 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400">
+                        <option value="ALL">📅 Toute l'année</option>
+                        <option value="01">Janvier</option><option value="02">Février</option><option value="03">Mars</option>
+                        <option value="04">Avril</option><option value="05">Mai</option><option value="06">Juin</option>
+                        <option value="07">Juillet</option><option value="08">Août</option><option value="09">Septembre</option>
+                        <option value="10">Octobre</option><option value="11">Novembre</option><option value="12">Décembre</option>
+                    </select>
+
+                    <button onclick="openSettingsModal()" title="Gérer Praticiens" class="bg-teal-800 hover:bg-teal-600 text-white border border-teal-600 p-1.5 rounded transition shadow flex items-center justify-center">⚙️</button>
+                    <button onclick="openRecapModal()" class="bg-indigo-600 hover:bg-indigo-500 text-sm font-semibold px-3 py-1.5 rounded transition shadow flex items-center gap-1 hidden md:flex">📊 Bilan</button>
+                    
+                    <div id="actionButtons" class="flex gap-2">
+                        <button id="btnNewFse" onclick="openFseModal()" class="bg-teal-500 hover:bg-teal-400 text-sm font-semibold px-3 py-1.5 rounded transition shadow flex items-center gap-1">+ Nouvelle FSE</button>
+                        <button id="btnNewNoemie" onclick="openNoemieModal()" class="hidden bg-emerald-500 hover:bg-emerald-400 text-sm font-semibold px-3 py-1.5 rounded transition shadow flex items-center gap-1">+ Nouveau Retour</button>
+                        <button id="btnNewRetro" onclick="openRetroModal()" class="hidden bg-purple-500 hover:bg-purple-400 text-sm font-semibold px-3 py-1.5 rounded transition shadow flex items-center gap-1">+ Nouvelle Rétro</button>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <main class="max-w-[1400px] mx-auto px-4 pb-6 pt-2 space-y-4">
+
+            <div id="dashboardPage" class="space-y-4 block">
+                <div class="sticky top-[60px] md:top-[64px] z-30 bg-gray-50/95 backdrop-blur-sm py-2 border-b border-gray-200">
+                    <section class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div class="bg-white p-3 rounded-xl shadow-sm border border-gray-200 flex flex-col justify-between">
+                            <p class="text-[10px] md:text-xs text-gray-500 font-medium uppercase mb-1">Total Soins Attendu</p>
+                            <p id="kpiTotalSoins" class="text-lg md:text-xl font-black text-gray-900 leading-none">0,00 €</p>
+                            <div class="flex justify-between items-center mt-2 pt-2 border-t border-gray-100 text-[10px] font-bold">
+                                <span class="text-teal-700">RO: <span id="kpiSoinsRO" class="font-mono">0,00 €</span></span>
+                                <span class="text-indigo-700">RC: <span id="kpiSoinsRC" class="font-mono">0,00 €</span></span>
+                            </div>
+                        </div>
+                        <div class="bg-white p-3 rounded-xl shadow-sm border border-gray-200 flex flex-col justify-between">
+                            <p class="text-[10px] md:text-xs text-gray-500 font-medium uppercase mb-1">Total Perçu</p>
+                            <p id="kpiTotalPercu" class="text-lg md:text-xl font-black text-emerald-600 leading-none">0,00 €</p>
+                            <div class="flex justify-between items-center mt-2 pt-2 border-t border-gray-100 text-[10px] font-bold">
+                                <span class="text-emerald-700 opacity-80">RO: <span id="kpiPercuRO" class="font-mono">0,00 €</span></span>
+                                <span class="text-emerald-700 opacity-80">RC: <span id="kpiPercuRC" class="font-mono">0,00 €</span></span>
+                            </div>
+                        </div>
+                        <div class="bg-white p-3 rounded-xl shadow-sm border border-gray-200 flex flex-col justify-between">
+                            <p class="text-[10px] md:text-xs text-gray-500 font-medium uppercase mb-1">Reste à Recouvrer</p>
+                            <p id="kpiTotalDu" class="text-lg md:text-xl font-black text-rose-600 leading-none">0,00 €</p>
+                            <div class="flex justify-between items-center mt-2 pt-2 border-t border-gray-100 text-[10px] font-bold">
+                                <span class="text-rose-700 opacity-80">RO: <span id="kpiDuRO" class="font-mono">0,00 €</span></span>
+                                <span class="text-rose-700 opacity-80">RC: <span id="kpiDuRC" class="font-mono">0,00 €</span></span>
+                            </div>
+                        </div>
+                        <div class="bg-white p-3 rounded-xl shadow-sm border border-gray-200 flex flex-col justify-center">
+                            <p class="text-[10px] md:text-xs text-gray-500 font-medium uppercase mb-1">Taux Recouvrement</p>
+                            <p id="kpiTaux" class="text-lg md:text-xl font-black text-teal-600 leading-none">0 %</p>
+                        </div>
+                    </section>
+                </div>
+
+                <div class="flex flex-wrap items-center gap-4 text-[10px] uppercase font-bold text-gray-500 px-2">
+                    <div class="flex items-center gap-1.5"><span class="w-3 h-3 bg-emerald-100 border border-emerald-300 rounded-sm"></span> Solde à 0€</div>
+                    <div class="flex items-center gap-1.5"><span class="w-3 h-3 bg-orange-100 border border-orange-300 rounded-sm"></span> Paiement partiel</div>
+                    <div class="flex items-center gap-1.5"><span class="w-3 h-3 bg-red-100 border border-red-300 rounded-sm"></span> Rejet</div>
+                    <div class="flex items-center gap-1.5"><span class="w-3 h-3 bg-white border border-gray-300 rounded-sm"></span> En attente</div>
+                    <div class="flex items-center gap-1.5"><span class="w-3 h-3 bg-gray-100 border border-gray-300 rounded-sm"></span> Défacturée</div>
+                </div>
+
+                <section class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden relative">
+                    <div class="w-full max-h-[65vh] overflow-y-auto table-scroll relative">
+                        <table class="w-full text-left border-collapse table-auto text-xs min-w-[1100px]">
+                            <thead class="bg-gray-100 text-gray-600 uppercase font-semibold sticky top-0 z-20 shadow-[0_1px_2px_rgba(0,0,0,0.1)]">
+                                <tr>
+                                    <th class="p-2 w-20 cursor-pointer hover:bg-gray-200 transition bg-gray-100" onclick="setSort('date')">Date ↕</th>
+                                    <th class="p-2 w-24 cursor-pointer hover:bg-gray-200 transition bg-gray-100" onclick="setSort('praticien')">Praticien ↕</th>
+                                    <th class="p-2 w-28 cursor-pointer hover:bg-gray-200 transition bg-gray-100" onclick="setSort('lot')">Lot / Caisse ↕</th>
+                                    <th class="p-2 w-24 bg-gray-100">N° FSE / Opt</th>
+                                    <th class="p-2 bg-gray-100">Patient</th>
+                                    <th class="p-2 w-28 bg-gray-100">Mutuelle / DRE</th>
+                                    <th class="p-2 text-right w-16 bg-gray-100">Mt RO</th>
+                                    <th class="p-2 text-center w-14 bg-gray-100">OK RO</th>
+                                    <th class="p-2 text-center w-24 bg-gray-100">Vir. RO</th>
+                                    <th class="p-2 text-right w-16 bg-gray-100">Mt RC</th>
+                                    <th class="p-2 text-center w-14 bg-gray-100">OK RC</th>
+                                    <th class="p-2 text-center w-24 bg-gray-100">Vir. RC</th>
+                                    <th class="p-2 text-right w-16 bg-gray-100">Total</th>
+                                    <th class="p-2 text-right w-16 bg-gray-100">Dû</th>
+                                    <th class="p-2 text-center w-32 bg-gray-100">Actions</th>
+                                </tr>
+                                <tr class="bg-gray-50 border-b border-gray-200">
+                                    <th class="p-1"><input type="text" id="searchDate" placeholder="Date..." class="w-full p-1 border border-gray-300 rounded bg-white font-normal focus:outline-none focus:ring-1 focus:ring-teal-500 text-[10px]"></th>
+                                    <th class="p-1"><input type="text" id="searchPraticien" placeholder="Prat..." class="w-full p-1 border border-gray-300 rounded bg-white font-normal focus:outline-none focus:ring-1 focus:ring-teal-500 text-[10px]"></th>
+                                    <th class="p-1"><input type="text" id="searchLot" placeholder="Lot/Caisse..." class="w-full p-1 border border-gray-300 rounded bg-white font-normal focus:outline-none focus:ring-1 focus:ring-teal-500 text-[10px]"></th>
+                                    <th class="p-1"><input type="text" id="searchNumFSE" placeholder="N° FSE..." class="w-full p-1 border border-gray-300 rounded bg-white font-normal focus:outline-none focus:ring-1 focus:ring-teal-500 text-[10px]"></th>
+                                    <th class="p-1"><input type="text" id="searchPatient" placeholder="Nom Patient..." class="w-full p-1 border border-gray-300 rounded bg-white font-normal focus:outline-none focus:ring-1 focus:ring-teal-500 text-[10px]"></th>
+                                    <th class="p-1"><input type="text" id="searchMutuelle" list="mutuellesList" placeholder="Mut/DRE..." class="w-full p-1 border border-gray-300 rounded bg-white font-normal focus:outline-none focus:ring-1 focus:ring-teal-500 text-[10px]"></th>
+                                    <th class="p-1"></th>
+                                    <th class="p-1"><select id="searchCheckRO" class="w-full p-1 border border-gray-300 rounded bg-white font-normal text-[10px] focus:outline-none focus:ring-1 focus:ring-teal-500"><option value="ALL">Tous</option><option value="VAL">OK</option><option value="ATT">Att.</option></select></th>
+                                    <th class="p-1"></th>
+                                    <th class="p-1"></th>
+                                    <th class="p-1"><select id="searchCheckRC" class="w-full p-1 border border-gray-300 rounded bg-white font-normal text-[10px] focus:outline-none focus:ring-1 focus:ring-teal-500"><option value="ALL">Tous</option><option value="VAL">OK</option><option value="ATT">Att.</option></select></th>
+                                    <th class="p-1"></th>
+                                    <th class="p-1"></th>
+                                    <th class="p-1"></th>
+                                    <th class="p-1"></th>
+                                </tr>
+                            </thead>
+                            <tbody id="fseTableBody" class="divide-y divide-gray-200 text-[11px]">
+                                </tbody>
+                        </table>
+                    </div>
+                    <div id="emptyState" class="hidden text-center py-8 text-gray-400 w-full bg-white relative z-0">
+                        Aucune facture ne correspond à vos critères de recherche.
+                    </div>
+                </section>
+            </div>
+
+            <div id="noemiePage" class="page-hidden space-y-4">
+                <section class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden relative">
+                    <div class="p-2 border-b border-gray-200 flex justify-between items-center bg-gray-50 z-30 relative">
+                        <h3 class="text-sm font-bold text-gray-700">📜 Historique des Retours Groupés</h3>
+                        <div class="flex items-center gap-3">
+                            <input type="file" id="fileInputNoemie" accept=".csv" class="hidden" onchange="handleImportNoemie(event)">
+                            <button onclick="document.getElementById('fileInputNoemie').click()" class="text-[11px] font-bold text-teal-600 hover:text-teal-800 border border-teal-200 hover:bg-teal-50 py-1 px-2 rounded shadow-sm flex items-center gap-1 transition">
+                                📥 Import CSV
+                            </button>
+                        </div>
+                    </div>
+                    <div class="w-full max-h-[70vh] overflow-y-auto table-scroll relative">
+                        <table class="w-full text-left border-collapse table-auto text-xs min-w-[900px]">
+                           <thead class="bg-teal-200 text-teal-900 text-xs uppercase text-left sticky top-0 z-10">
+                                <tr>
+                                    <th class="p-2 font-bold cursor-pointer hover:bg-teal-300 transition select-none w-32" onclick="sortNoemie('date')" title="Trier par date">Date / Origine <span id="sortIcon_date" class="text-teal-900 ml-1">▼</span></th>
+                                    <th class="p-2 font-bold w-24">Praticien</th>
+                                    <th class="p-2 font-bold cursor-pointer hover:bg-teal-300 transition select-none" onclick="sortNoemie('caisse')" title="Trier par organisme">Caisse/Mut <span id="sortIcon_caisse" class="text-teal-600/40 ml-1">↕</span></th>
+                                    <th class="p-2 font-bold cursor-pointer hover:bg-teal-300 transition select-none text-center w-24" onclick="sortNoemie('nbFSE')" title="Trier par nombre de factures">Nb FSE <span id="sortIcon_nbFSE" class="text-teal-600/40 ml-1">↕</span></th>
+                                    <th class="p-2 font-bold text-right w-24">Montant</th>
+                                    <th class="p-2 font-bold text-center w-28">Encaissé le</th>
+                                    <th class="p-2 font-bold w-32">N° Relevé</th>
+                                    <th class="p-2 font-bold">Info / Com.</th>
+                                    <th class="p-2 font-bold text-center w-20">Actions</th>
+                                </tr>
+                                <tr class="bg-teal-100/80">
+                                    <td class="p-1"><input type="text" id="sNoemieDate" oninput="renderNoemieTable()" class="w-full text-[10px] p-1.5 border border-teal-300 rounded shadow-inner focus:ring-teal-500 font-normal outline-none" placeholder="Filtrer Date..."></td>
+                                    <td class="p-1"><input type="text" id="sNoemiePraticien" oninput="renderNoemieTable()" class="w-full text-[10px] p-1.5 border border-teal-300 rounded shadow-inner focus:ring-teal-500 font-normal outline-none" placeholder="Praticien..."></td>
+                                    <td class="p-1">
+                                        <select id="sNoemieCaisse" onchange="renderNoemieTable()" class="w-full text-[10px] p-1.5 border border-teal-300 rounded shadow-inner bg-white focus:ring-teal-500 font-normal outline-none">
+                                            <option value="">Toutes Caisses</option>
+                                        </select>
+                                    </td>
+                                    <td class="p-1"><input type="text" id="sNoemieFSE" oninput="renderNoemieTable()" class="w-full text-[10px] p-1.5 border border-teal-300 rounded shadow-inner text-center focus:ring-teal-500 font-normal outline-none" placeholder="N° FSE..."></td>
+                                    <td class="p-1"><input type="text" id="sNoemieMontant" oninput="renderNoemieTable()" class="w-full text-[10px] p-1.5 border border-teal-300 rounded shadow-inner text-right focus:ring-teal-500 font-normal outline-none" placeholder="Montant..."></td>
+                                    <td class="p-1"><input type="text" id="sNoemieEncaisse" oninput="renderNoemieTable()" class="w-full text-[10px] p-1.5 border border-teal-300 rounded shadow-inner text-center focus:ring-teal-500 font-normal outline-none" placeholder="Encaissement..."></td>
+                                    <td class="p-1"><input type="text" id="sNoemieReleve" oninput="renderNoemieTable()" class="w-full text-[10px] p-1.5 border border-teal-300 rounded shadow-inner focus:ring-teal-500 font-normal outline-none" placeholder="Relevé..."></td>
+                                    <td class="p-1"><input type="text" id="sNoemieInfo" oninput="renderNoemieTable()" class="w-full text-[10px] p-1.5 border border-teal-300 rounded shadow-inner focus:ring-teal-500 font-normal outline-none" placeholder="Infos..."></td>
+                                    <td class="p-1 text-center"><button onclick="clearNoemieFilters()" class="text-[10px] font-bold bg-white border border-teal-400 text-teal-700 px-2 py-1 rounded hover:bg-teal-50 transition shadow-sm w-full outline-none">Effacer</button></td>
+                                </tr>
+                            </thead>
+                            <tbody id="noemieTableBody" class="text-[12px]">
+                                </tbody>
+                        </table>
+                    </div>
+                </section>
+            </div>
+
+            <div id="retrosPage" class="page-hidden space-y-4">
+                <section class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden relative">
+                    <div class="p-3 border-b border-gray-200 flex justify-between items-center bg-gray-50 z-30 relative">
+                        <div>
+                            <h3 class="text-sm font-bold text-gray-700">💼 Gestion des Rétrocessions</h3>
+                            <p class="text-xs text-gray-500">Suivi des paiements Titulaire / Remplaçant</p>
+                        </div>
+                        <button onclick="openRetroBilanModal()" class="bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold px-3 py-1.5 rounded transition shadow flex items-center gap-1">
+                            📊 Bilan & Régularisation
+                        </button>
+                    </div>
+                    <div class="w-full overflow-y-auto table-scroll relative">
+                        <table class="w-full text-left border-collapse table-auto text-xs min-w-[950px]">
+                            <thead class="bg-gray-100 text-gray-600 uppercase font-semibold sticky top-0 z-20 shadow-[0_1px_2px_rgba(0,0,0,0.1)]">
+                                <tr>
+                                    <th class="p-2 w-28 bg-gray-100">Période</th>
+                                    <th class="p-2 w-24 bg-gray-100">Praticien</th>
+                                    <th class="p-2 text-center w-16 bg-gray-100">Taux %</th>
+                                    <th class="p-2 text-right w-24 bg-gray-100">Mt Kiné</th>
+                                    <th class="p-2 text-right w-24 bg-gray-100">Mt Rempl.</th>
+                                    <th class="p-2 text-right w-24 bg-purple-50 text-purple-800">Total FSE</th>
+                                    <th class="p-2 text-right w-24 bg-gray-100">Total Payé</th>
+                                    <th class="p-2 text-center w-24 bg-gray-100">Date Paie.</th>
+                                    <th class="p-2 text-right w-24 bg-gray-100">Solde</th>
+                                    <th class="p-2 text-center w-24 bg-gray-100">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="retrosTableBody" class="text-[12px] divide-y divide-gray-200">
+                                </tbody>
+                        </table>
+                    </div>
+                    <div id="retroEmptyState" class="hidden text-center py-8 text-gray-400 w-full bg-white relative z-0">
+                        Aucune rétrocession enregistrée pour cette sélection.
+                    </div>
+                </section>
+            </div>
+
+        </main>
+
+        <div id="fseModal" class="hidden fixed inset-0 z-50 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <div class="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[95vh] flex flex-col overflow-hidden">
+                <div class="flex justify-between items-center bg-teal-600 text-white p-4">
+                    <div>
+                        <h2 id="fseFormTitle" class="text-lg font-bold">Saisie d'un Lot de Facturation</h2>
+                        <div class="flex items-center gap-3 mt-1">
+                            <p class="text-xs text-teal-100">Dernier lot : <strong id="lastLotInfo" class="text-white font-mono bg-teal-700 px-1.5 py-0.5 rounded shadow-sm">-</strong></p>
+                            <div class="flex items-center gap-2 text-[11px] bg-teal-800 px-2 py-0.5 rounded shadow-inner border border-teal-500">
+                                <span class="text-teal-200 uppercase font-bold">Total Saisi :</span>
+                                <span class="text-teal-300">RO <span id="fseLiveTotalRO" class="text-white font-bold font-mono text-xs">0.00</span>€</span>
+                                <span class="text-teal-500">|</span>
+                                <span class="text-indigo-300">RC <span id="fseLiveTotalRC" class="text-white font-bold font-mono text-xs">0.00</span>€</span>
+                                <span class="text-teal-500">|</span>
+                                <span class="text-emerald-300">Global <strong id="fseLiveTotalGlobal" class="text-white font-black font-mono text-xs">0.00</strong>€</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-4">
+                        <span class="text-xs text-teal-100 italic">Assigné à : <strong id="lblFormPraticien" class="text-white"></strong></span>
+                        <button type="button" onclick="closeFseModal()" class="text-teal-200 hover:text-white text-2xl font-bold leading-none">✕</button>
+                    </div>
+                </div>
+
+                <div class="p-4 overflow-y-auto w-full">
+                    <form id="fseForm" onsubmit="saveFSE(event)" onkeydown="handleFormEnter(event, 'fseFacturesList', ['fse-num-input', 'fse-patient-input', 'fse-ro-input', 'fse-rc-input'])">
+                        <div class="grid grid-cols-1 md:grid-cols-12 gap-3 mb-4 border-b border-gray-200 pb-4 bg-teal-50/30 p-3 rounded-lg border border-teal-100 items-end">
+                            <div class="md:col-span-3">
+                                <label class="block text-xs font-bold text-teal-800 uppercase mb-1">Date du Lot *</label>
+                                <input type="date" id="fseDate" required class="w-full border border-teal-300 rounded p-2 text-sm bg-white focus:ring-teal-500 shadow-sm">
+                            </div>
+                            <div class="md:col-span-2">
+                                <label class="block text-xs font-bold text-teal-800 uppercase mb-1">N° du Lot</label>
+                                <input type="text" id="fseLot" placeholder="Ex: 142" class="w-full border border-teal-300 rounded p-2 text-sm bg-white focus:ring-teal-500 shadow-sm">
+                            </div>
+                            <div class="md:col-span-1 flex justify-center pb-2.5">
+                                <label class="flex items-center gap-1 cursor-pointer text-[11px] font-bold text-teal-800 hover:text-teal-600 transition whitespace-nowrap" title="Lot Dégradé">
+                                    <input type="checkbox" id="fseDegradeLot" class="w-3.5 h-3.5 text-teal-600 rounded focus:ring-teal-500 cursor-pointer"> Dég.
+                                </label>
+                            </div>
+                            <div class="md:col-span-3">
+                                <label class="block text-xs font-bold text-teal-800 uppercase mb-1">Caisse (RO)</label>
+                                <input type="text" id="fseCaisse" list="caissesList" placeholder="Ex: CPAM 75" class="w-full border border-teal-300 rounded p-2 text-sm bg-white focus:ring-teal-500 shadow-sm">
+                            </div>
+                            <div class="md:col-span-3 grid grid-cols-2 gap-2">
+                                <div>
+                                    <label class="block text-[10px] font-bold text-gray-500 uppercase mb-1 text-center truncate">Générer</label>
+                                    <input type="number" id="nbFseToAdd" value="1" min="1" class="w-full border border-gray-300 rounded p-2 text-sm bg-white text-center shadow-sm">
+                                </div>
+                                <div class="flex items-end">
+                                    <button type="button" onclick="updateNbFseRows()" class="w-full bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-2 rounded text-xs transition shadow-sm border border-gray-300 h-[38px] px-1 truncate">Ajouter</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="bg-indigo-50/40 p-4 rounded-lg border border-indigo-200">
+                            <div class="flex items-center gap-2 px-1 pb-2 text-[10px] font-bold text-indigo-800 uppercase border-b border-indigo-100 mb-2">
+                                <div class="w-24">N° FSE</div>
+                                <div class="flex-1 min-w-[150px]">Patient *</div>
+                                <div class="w-20">Part RO €</div>
+                                <div class="w-20">Part RC €</div>
+                                <div class="w-6 text-center"></div>
+                            </div>
+                            <div id="fseFacturesList" class="space-y-2"></div>
+                        </div>
+
+                        <div class="mt-6 flex justify-end">
+                            <button type="submit" id="submitBtnFse" class="bg-teal-600 hover:bg-teal-700 text-white font-bold py-2.5 px-8 rounded-lg shadow-md transition text-sm">Enregistrer le Lot</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div id="noemieModal" class="hidden fixed inset-0 z-50 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <div class="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[95vh] flex flex-col">
+                <div class="flex justify-between items-center border-b border-gray-200 p-4 bg-gray-50 rounded-t-xl">
+                    <div>
+                        <h3 class="text-lg font-bold text-gray-900">Saisie d'un Retour NOEMIE</h3>
+                        <p class="text-[10px] text-gray-500">Verrouillage automatique des factures trouvées.</p>
+                    </div>
+                    <div class="flex items-center gap-4">
+                        <span class="text-xs text-gray-500 italic bg-white border px-2 py-1 rounded shadow-sm">Assigné à : <strong id="lblNoemiePraticien" class="text-teal-700"></strong></span>
+                        <button onclick="closeNoemieModal()" class="text-gray-400 hover:text-gray-600 text-2xl font-bold leading-none">✕</button>
+                    </div>
+                </div>
+                <div class="p-4 overflow-y-auto w-full">
+                    <form id="noemieForm" onsubmit="saveNoemieManual(event)" onkeydown="handleFormEnter(event, 'noemieFacturesList', ['fse-input', 'montant-input'])">
+                        <div class="flex flex-wrap items-center gap-4 bg-gray-100 p-3 rounded-lg border border-gray-200 mb-4">
+                            <span class="text-xs font-bold text-gray-700 uppercase">Origine :</span>
+                            <label class="flex items-center gap-1.5 text-sm font-medium cursor-pointer">
+                                <input type="radio" name="cat_origine" tabindex="-1" id="cat_noemie" class="w-4 h-4 text-teal-600 focus:ring-teal-500 cursor-pointer" checked> NOEMIE
+                            </label>
+                            <label class="flex items-center gap-1.5 text-sm font-medium cursor-pointer">
+                                <input type="radio" name="cat_origine" tabindex="-1" id="cat_justif" class="w-4 h-4 text-teal-600 focus:ring-teal-500 cursor-pointer"> Justificatif
+                            </label>
+                            <label class="flex items-center gap-1.5 text-sm font-medium cursor-pointer">
+                                <input type="radio" name="cat_origine" tabindex="-1" id="cat_releve" class="w-4 h-4 text-teal-600 focus:ring-teal-500 cursor-pointer"> Relevé Bancaire
+                            </label>
+                        </div>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-12 gap-x-4 gap-y-4 items-end mb-4">
+                            <div class="md:col-span-3"><label class="block text-xs font-bold text-gray-600 uppercase mb-1">Date *</label><input type="date" id="n_date" required class="w-full border border-gray-300 rounded p-2 text-sm focus:ring-teal-500 shadow-sm"></div>
+                            <div class="md:col-span-3"><label class="block text-xs font-bold text-gray-600 uppercase mb-1">Caisse / Mut</label><input type="text" id="n_caisse" list="caissesList" placeholder="CPAM, MGEN..." class="w-full border border-gray-300 rounded p-2 text-sm focus:ring-teal-500 shadow-sm"></div>
+                            <div class="md:col-span-3"><label class="block text-xs font-bold text-gray-600 uppercase mb-1">Encaissé le</label><input type="date" tabindex="-1" id="n_encaisse" class="w-full border border-indigo-300 rounded p-2 text-sm focus:ring-indigo-500 shadow-sm bg-indigo-50/30"></div>
+                            <div class="md:col-span-3"><label class="block text-xs font-bold text-gray-600 uppercase mb-1">N° Relevé</label><input type="text" tabindex="-1" id="n_releve" class="w-full border border-gray-300 rounded p-2 text-sm focus:ring-teal-500 shadow-sm"></div>
+                            <div class="md:col-span-12"><label class="block text-xs font-bold text-gray-600 uppercase mb-1">Informations / Commentaire</label><input type="text" tabindex="-1" id="n_info" placeholder="Commentaire..." class="w-full border border-gray-300 rounded p-2 text-sm focus:ring-teal-500 shadow-sm"></div>
+                        </div>
+                        
+                        <div class="bg-teal-50/40 p-4 rounded-lg border border-teal-200 md:w-2/3 mx-auto">
+                            <div class="flex justify-between items-end mb-3 border-b border-teal-100 pb-2 gap-4">
+                                <label class="block text-xs font-bold text-teal-800 uppercase pb-1">Factures du retour</label>
+                                <div class="flex items-center gap-2">
+                                    <label class="text-[10px] font-bold text-gray-500 uppercase">Générer</label>
+                                    <input type="number" id="nbNoemieFseToAdd" value="1" min="1" class="w-16 border border-gray-300 rounded p-1 text-xs bg-white text-center shadow-sm focus:ring-teal-500">
+                                    <button type="button" onclick="updateNbNoemieFseRows()" class="text-[10px] font-bold bg-white text-teal-700 px-3 py-1.5 rounded hover:bg-teal-100 transition shadow-sm border border-teal-300">Ajouter</button>
+                                </div>
+                            </div>
+                            <div id="noemieFacturesList" class="space-y-2"></div>
+                            <div class="flex justify-end items-center mt-3 p-2 bg-indigo-50 rounded border border-indigo-100 shadow-inner">
+                                <span class="font-semibold text-gray-700 mr-2">Total en cours :</span>
+                                <span id="noemieLiveTotal" class="font-bold text-xl text-indigo-700">0.00</span>
+                                <span class="font-bold text-xl text-indigo-700 ml-1">€</span>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-6 flex justify-end gap-3">
+                            <button type="submit" id="btnSubmitNoemieNew" class="bg-teal-600 hover:bg-teal-700 text-white font-bold py-2.5 px-6 rounded-lg transition shadow-md text-sm focus:ring-4 focus:ring-teal-300 outline-none">Enregistrer et Nouveau</button>
+                            <button type="submit" id="btnSubmitNoemieAction" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-6 rounded-lg transition shadow-md text-sm focus:ring-4 focus:ring-emerald-300 outline-none">Sauvegarder et Pointer</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div id="retroModal" class="hidden fixed inset-0 z-50 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+                <div class="flex justify-between items-center border-b border-gray-200 p-4 bg-purple-50 rounded-t-xl">
+                    <div>
+                        <h3 id="retroModalTitle" class="text-lg font-bold text-purple-900">Saisie Rétrocession</h3>
+                    </div>
+                    <button onclick="closeRetroModal()" class="text-purple-400 hover:text-purple-600 text-2xl font-bold leading-none">✕</button>
+                </div>
+                <div class="p-4 overflow-y-auto w-full">
+                    <form id="retroForm" onsubmit="saveRetro(event)">
+                        <div class="grid grid-cols-2 gap-4 mb-4">
+                            <div>
+                                <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Année *</label>
+                                <input type="number" id="retroAnnee" required class="w-full border border-gray-300 rounded p-2 text-sm focus:ring-purple-500 shadow-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Mois *</label>
+                                <select id="retroMois" required class="w-full border border-gray-300 rounded p-2 text-sm focus:ring-purple-500 shadow-sm bg-white">
+                                    <option value="01">Janvier</option><option value="02">Février</option><option value="03">Mars</option>
+                                    <option value="04">Avril</option><option value="05">Mai</option><option value="06">Juin</option>
+                                    <option value="07">Juillet</option><option value="08">Août</option><option value="09">Septembre</option>
+                                    <option value="10">Octobre</option><option value="11">Novembre</option><option value="12">Décembre</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-3 gap-4 mb-4 border-t border-gray-100 pt-4">
+                            <div>
+                                <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Taux Rétro %</label>
+                                <input type="number" step="0.01" id="retroTaux" class="w-full border border-gray-300 rounded p-2 text-sm focus:ring-purple-500 shadow-sm" placeholder="Ex: 25">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Mt Kiné (€) *</label>
+                                <input type="number" step="0.01" id="retroKine" required class="w-full border border-gray-300 rounded p-2 text-sm focus:ring-purple-500 shadow-sm" placeholder="0.00">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Mt Remplaçant (€) *</label>
+                                <input type="number" step="0.01" id="retroRemplacant" required class="w-full border border-gray-300 rounded p-2 text-sm focus:ring-purple-500 shadow-sm" placeholder="0.00">
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4 mb-4 border-t border-gray-100 pt-4">
+                            <div>
+                                <label class="block text-xs font-bold text-emerald-700 uppercase mb-1">Montant Payé (€)</label>
+                                <input type="number" step="0.01" id="retroPaye" class="w-full border border-emerald-300 bg-emerald-50 rounded p-2 text-sm focus:ring-emerald-500 shadow-sm" placeholder="0.00">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Date de Paiement</label>
+                                <input type="date" id="retroDatePaiement" class="w-full border border-gray-300 rounded p-2 text-sm focus:ring-purple-500 shadow-sm">
+                            </div>
+                        </div>
+                        <div class="mt-6 flex justify-end">
+                            <button type="submit" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2.5 px-8 rounded-lg shadow-md transition text-sm">Enregistrer Rétro</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div id="retroRegulModal" class="hidden fixed inset-0 z-[60] bg-gray-900/70 backdrop-blur-sm flex items-center justify-center p-4">
+            <div class="bg-white rounded-xl shadow-2xl w-full max-w-md flex flex-col overflow-hidden">
+                <div class="flex justify-between items-center bg-orange-50 border-b border-orange-200 p-4">
+                    <div>
+                        <h3 class="text-lg font-bold text-orange-900">Régulariser Rétrocession</h3>
+                        <p id="retroRegulSubtitle" class="text-xs text-orange-700">Mettre à jour les montants réels</p>
+                    </div>
+                    <button onclick="closeRetroRegulModal()" class="text-orange-400 hover:text-orange-700 text-2xl font-bold leading-none">✕</button>
+                </div>
+                <div class="p-5">
+                    <p class="text-xs text-gray-500 mb-4">Saisissez les montants finaux validés (URSSAF/SNIR). Les valeurs d'origine seront conservées pour historique.</p>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-bold text-gray-700 uppercase mb-1">Nouveau Mt Kiné (€)</label>
+                            <input type="number" step="0.01" id="regKineInput" class="w-full border border-gray-300 rounded p-2 text-sm focus:ring-orange-500">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-700 uppercase mb-1">Nouveau Mt Remplaçant (€)</label>
+                            <input type="number" step="0.01" id="regRemplacantInput" class="w-full border border-gray-300 rounded p-2 text-sm focus:ring-orange-500">
+                        </div>
+                        <button onclick="saveRegulRetro()" class="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 px-4 rounded transition shadow text-sm mt-2">
+                            Valider la Régularisation
+                        </button>
+                        <button onclick="clearRegulRetro()" class="w-full bg-white hover:bg-gray-50 text-gray-600 border border-gray-300 font-bold py-2 px-4 rounded transition shadow-sm text-xs mt-2">
+                            Annuler la régularisation (Reset)
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="retroBilanModal" class="hidden fixed inset-0 z-[60] bg-gray-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <div class="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+                <div class="flex justify-between items-center bg-purple-700 border-b border-purple-800 p-4 rounded-t-xl">
+                    <div>
+                        <h3 class="text-lg font-bold text-white">📊 Bilan des Rétrocessions</h3>
+                        <p id="retroBilanSubtitle" class="text-xs text-purple-200">Synthèse Globale (Année sélectionnée)</p>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <button onclick="printRetroBilan()" class="bg-white text-purple-700 hover:bg-purple-50 text-xs font-bold px-3 py-1.5 rounded transition shadow flex items-center gap-1">
+                            🖨️ Générer PDF
+                        </button>
+                        <button onclick="closeRetroBilanModal()" class="text-purple-200 hover:text-white text-2xl font-bold leading-none">✕</button>
+                    </div>
+                </div>
+                <div class="w-full overflow-y-auto p-6 bg-gray-50/50" id="retroBilanPrintArea">
+                    <div class="mb-6 border-b border-gray-200 pb-4">
+                        <h2 class="text-2xl font-black text-gray-800 mb-1" id="printBilanTitle">Bilan Rétrocessions</h2>
+                        <p class="text-sm text-gray-500" id="printBilanDetails"></p>
+                    </div>
+                    
+                    <div class="bg-white rounded-xl border border-gray-200 shadow-sm mb-6 overflow-hidden">
+                        <table class="w-full text-left border-collapse table-auto text-xs">
+                            <thead class="bg-purple-50 text-purple-900 font-semibold border-b border-purple-100">
+                                <tr>
+                                    <th class="p-2">Mois</th>
+                                    <th class="p-2 text-right">Mt Kiné</th>
+                                    <th class="p-2 text-right">Mt Rempl.</th>
+                                    <th class="p-2 text-right">Total FSE</th>
+                                    <th class="p-2 text-right">Total Payé</th>
+                                    <th class="p-2 text-right">Solde</th>
+                                </tr>
+                            </thead>
+                            <tbody id="retroBilanMonthsBody" class="divide-y divide-gray-100 bg-white">
+                                </tbody>
+                        </table>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                        <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                            <h4 class="text-xs font-bold text-gray-500 uppercase mb-3">Totaux d'Origine (Estimés)</h4>
+                            <div class="flex justify-between mb-1"><span class="text-sm text-gray-600">Total Kiné:</span> <span class="font-mono font-bold" id="bilanOrigKine">0.00 €</span></div>
+                            <div class="flex justify-between mb-1"><span class="text-sm text-gray-600">Total Remplaçant:</span> <span class="font-mono font-bold" id="bilanOrigRempl">0.00 €</span></div>
+                            <div class="flex justify-between mt-2 pt-2 border-t border-gray-300"><span class="text-sm font-bold text-gray-800">Total FSE Estimé:</span> <span class="font-mono font-black text-gray-900" id="bilanOrigTotal">0.00 €</span></div>
+                        </div>
+                        <div class="bg-orange-50 p-4 rounded-xl border border-orange-200 shadow-sm">
+                            <h4 class="text-xs font-bold text-orange-800 uppercase mb-3">Totaux Régularisés (Réels)</h4>
+                            <div class="flex justify-between mb-1"><span class="text-sm text-orange-700">Total Kiné:</span> <span class="font-mono font-bold text-orange-900" id="bilanRegKine">0.00 €</span></div>
+                            <div class="flex justify-between mb-1"><span class="text-sm text-orange-700">Total Remplaçant:</span> <span class="font-mono font-bold text-orange-900" id="bilanRegRempl">0.00 €</span></div>
+                            <div class="flex justify-between mt-2 pt-2 border-t border-orange-300"><span class="text-sm font-bold text-orange-900">Total FSE Réel:</span> <span class="font-mono font-black text-orange-900" id="bilanRegTotal">0.00 €</span></div>
+                        </div>
+                    </div>
+
+                    <div class="bg-white p-5 rounded-xl border-2 border-gray-800 shadow-sm mb-6">
+                        <div class="flex flex-col md:flex-row justify-between items-center gap-4">
+                            <div>
+                                <h4 class="text-sm font-bold text-gray-500 uppercase mb-1">Montants Déjà Versés</h4>
+                                <div class="text-2xl font-mono font-bold text-emerald-600" id="bilanTotalPaye">0.00 €</div>
+                            </div>
+                            <div class="text-right">
+                                <h4 class="text-sm font-bold text-gray-800 uppercase mb-1">Reste à Régulariser (Solde Final)</h4>
+                                <div class="text-3xl font-mono font-black" id="bilanSoldeFinal">0.00 €</div>
+                                <p class="text-[10px] text-gray-500 mt-1" id="bilanSoldeInfo">Différence entre (Total Réel) et (Montants Versés)</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="impayesModal" class="hidden fixed inset-0 z-50 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <div class="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+                <div class="flex justify-between items-center bg-rose-700 border-b border-rose-800 p-4 rounded-t-xl">
+                    <div>
+                        <h3 class="text-lg font-bold text-white">⚠️ Liste Globale des Impayés</h3>
+                        <p class="text-xs text-rose-200">Toutes les factures non soldées intégralement.</p>
+                    </div>
+                    <div class="flex items-center gap-4">
+                        <input type="text" id="sImpayesText" oninput="renderImpayesTable()" placeholder="Rechercher (Patient, FSE, Mutuelle)..." class="w-64 p-1.5 border border-rose-500 rounded bg-white text-sm focus:outline-none focus:ring-2 focus:ring-rose-300 shadow-inner">
+                        <button onclick="closeImpayesModal()" class="text-rose-200 hover:text-white text-2xl font-bold leading-none">✕</button>
+                    </div>
+                </div>
+                <div class="w-full overflow-y-auto table-scroll flex-1">
+                    <table class="w-full text-left border-collapse table-auto text-sm">
+                        <thead class="bg-rose-50 text-rose-800 font-semibold border-b border-rose-200 sticky top-0 z-10 shadow-sm">
+                            <tr>
+                                <th class="p-3 w-28 cursor-pointer hover:bg-rose-100 transition" onclick="setSortImpayes('date')">Date ↕</th>
+                                <th class="p-3 w-28 cursor-pointer hover:bg-rose-100 transition" onclick="setSortImpayes('praticien')">Praticien ↕</th>
+                                <th class="p-3 cursor-pointer hover:bg-rose-100 transition" onclick="setSortImpayes('patient')">Patient ↕</th>
+                                <th class="p-3 w-24 text-center cursor-pointer hover:bg-rose-100 transition" onclick="setSortImpayes('numFSE')">N° FSE ↕</th>
+                                <th class="p-3 w-32 cursor-pointer hover:bg-rose-100 transition" onclick="setSortImpayes('mutuelle')">Mutuelle ↕</th>
+                                <th class="p-3 text-right w-24 cursor-pointer hover:bg-rose-100 transition" onclick="setSortImpayes('montant')">Montant Dû ↕</th>
+                            </tr>
+                        </thead>
+                        <tbody id="impayesTableBody" class="divide-y divide-gray-100"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div id="detailsImpayesModal" class="hidden fixed inset-0 z-[90] bg-gray-900/70 backdrop-blur-sm flex items-center justify-center p-4">
+            <div class="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+                <div class="flex justify-between items-center bg-orange-600 border-b border-orange-700 p-4 rounded-t-xl">
+                    <div>
+                        <h3 id="detailsImpayesTitle" class="text-lg font-bold text-white">Détails Impayés</h3>
+                        <p id="detailsImpayesSubtitle" class="text-xs text-orange-200">Factures à relancer</p>
+                    </div>
+                    <button onclick="closeDetailsImpayesModal()" class="text-orange-200 hover:text-white text-2xl font-bold leading-none">✕</button>
+                </div>
+                <div class="w-full overflow-y-auto table-scroll flex-1 p-2">
+                    <table class="w-full text-left border-collapse table-auto text-sm">
+                        <thead class="bg-orange-200 text-orange-900 text-xs uppercase text-left sticky top-0">
+                            <tr>
+                                <th class="p-2 font-bold w-24">Date</th>
+                                <th class="p-2 font-bold text-center w-16">Lot</th>
+                                <th class="p-2 font-bold text-center w-20">N° DRE</th>
+                                <th class="p-2 font-bold w-24">Praticien</th>
+                                <th class="p-2 font-bold">Patient</th>
+                                <th class="p-2 font-bold text-center w-24">N° FSE</th>
+                                <th class="p-2 font-bold w-32">Mutuelle</th>
+                                <th class="p-2 font-bold text-right w-24">Montant Dû</th>
+                            </tr>
+                        </thead>
+                        <tbody id="detailsImpayesBody" class="divide-y divide-gray-100"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div id="fseDetailsModal" class="hidden fixed inset-0 z-[100] bg-gray-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <div class="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col">
+                <div class="flex justify-between items-center bg-teal-700 border-b border-teal-800 p-4">
+                    <h3 class="text-base font-bold text-white">Détails de la Facture</h3>
+                    <button onclick="closeFseDetailsModal()" class="text-teal-200 hover:text-white text-2xl font-bold leading-none">✕</button>
+                </div>
+                <div class="p-5 space-y-4" id="fseDetailsContent"></div>
+            </div>
+        </div>
+
+        <div id="dreModal" class="hidden fixed inset-0 z-[80] bg-gray-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <div class="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden flex flex-col">
+                <div class="flex justify-between items-start bg-indigo-50 border-b border-indigo-100 p-4">
+                    <div>
+                        <h3 class="text-[10px] font-bold text-indigo-500 uppercase tracking-wide">Ajouter DRE / Mutuelle</h3>
+                        <div class="text-2xl font-black text-indigo-700 mt-0.5 font-mono">FSE N° <span id="dreModalFseNum"></span></div>
+                        <div class="text-xs text-indigo-900 mt-1">Patient : <strong id="dreModalPatientName"></strong></div>
+                    </div>
+                    <button onclick="closeDreModal()" class="text-indigo-400 hover:text-indigo-800 text-2xl font-bold leading-none mt-1">✕</button>
+                </div>
+                <div class="p-4 space-y-4">
+                    <p class="text-xs text-gray-600">Renseignez les informations complémentaires pour la part RC.</p>
+                    <div><label class="block text-[11px] font-bold text-gray-600 uppercase mb-1">N° DRE</label><input type="text" id="dreModal_num" class="w-full border border-gray-300 rounded p-2 text-sm focus:ring-indigo-500" placeholder="Ex: 987654"></div>
+                    <div><label class="block text-[11px] font-bold text-gray-600 uppercase mb-1">Mutuelle</label><input type="text" id="dreModal_mutuelle" list="mutuellesList" class="w-full border border-gray-300 rounded p-2 text-sm focus:ring-indigo-500" placeholder="Ex: MGEN"></div>
+                    <button onclick="saveDreAction()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded transition shadow text-sm">Valider</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="settingsModal" class="hidden fixed inset-0 z-[60] bg-gray-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <div class="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col">
+                <div class="flex justify-between items-center bg-gray-50 border-b border-gray-200 p-4">
+                    <h3 class="text-lg font-bold text-gray-900">⚙️ Gérer Praticiens</h3>
+                    <button onclick="closeSettingsModal()" class="text-gray-400 hover:text-gray-800 text-2xl font-bold leading-none">✕</button>
+                </div>
+                <div class="p-6 space-y-6">
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">Praticiens & Couleurs</label>
+                        <div id="settingsPraticiensContainer" class="space-y-2 mb-2"></div>
+                        <button type="button" onclick="addSettingsPraticienRow()" class="text-xs font-bold text-teal-600 bg-teal-50 px-2 py-1 rounded hover:bg-teal-100">+ Ajouter un praticien</button>
+                    </div>
+                    <button onclick="saveSettings()" class="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 px-4 rounded transition shadow">Sauvegarder les paramètres</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="recapModal" class="hidden fixed inset-0 z-[60] bg-gray-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <div class="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
+                <div class="flex justify-between items-center bg-gray-50 border-b border-gray-200 p-4">
+                    <div>
+                        <h3 class="text-lg font-bold text-gray-900">📊 Récapitulatif Comptable Annuel</h3>
+                        <p class="text-xs text-gray-500">Vue consolidée (Filtre Praticien et Année appliqués)</p>
+                    </div>
+                    <div class="flex items-center gap-4">
+                        <div id="kpiImpayesGlobal" class="px-4 py-2 rounded-lg font-bold text-xs shadow-sm transition-colors border">
+                            Taux d'impayés général : <span id="txtImpayesGlobal">0.00 %</span>
+                        </div>
+                        <button onclick="closeRecapModal()" class="text-gray-400 hover:text-gray-800 text-2xl font-bold leading-none">✕</button>
+                    </div>
+                </div>
+                <div class="p-4 overflow-y-auto w-full table-scroll">
+                    <table class="w-full text-left border-collapse table-auto text-xs">
+                        <thead class="bg-gray-50 text-gray-600 font-semibold border-b border-gray-200">
+                            <tr>
+                                <th class="p-2 sticky top-0 bg-gray-50">Mois</th>
+                                <th class="p-2 text-right sticky top-0 bg-teal-50/90 text-teal-800">RO Facturé</th>
+                                <th class="p-2 text-right sticky top-0 bg-teal-50/90 text-teal-800">RO Perçu</th>
+                                <th class="p-2 text-right sticky top-0 bg-indigo-50/90 text-indigo-800">RC Facturé</th>
+                                <th class="p-2 text-right sticky top-0 bg-indigo-50/90 text-indigo-800">RC Perçu</th>
+                                <th class="p-2 text-right font-bold text-gray-800 sticky top-0 bg-gray-50">Total Facturé</th>
+                                <th class="p-2 text-right font-bold text-emerald-700 sticky top-0 bg-gray-50">Total Perçu</th>
+                                <th class="p-2 text-right font-bold text-rose-600 sticky top-0 bg-gray-50">Reste à Recouvrer</th>
+                                <th class="p-2 text-right font-bold text-orange-700 sticky top-0 bg-orange-50">Taux Impayé Cumulé</th>
+                            </tr>
+                        </thead>
+                        <tbody id="recapTableBody" class="divide-y divide-gray-100 font-mono text-[12px]"></tbody>
+                        <tfoot class="bg-gray-100 font-bold border-t-2 border-gray-300 text-[12px]">
+                            <tr id="recapTableTotal"></tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div id="impayesBilanModal" class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-[70] flex items-center justify-center p-4">
+            <div class="bg-gray-50 w-full max-w-4xl rounded-2xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden border border-gray-200">
+                <div class="flex justify-between items-center bg-rose-600 text-white p-4">
+                    <h2 class="text-lg font-bold" id="impayesBilanTitle">Détail des Impayés</h2>
+                    <button type="button" onclick="document.getElementById('impayesBilanModal').classList.add('hidden')" class="text-rose-200 hover:text-white text-2xl font-bold leading-none outline-none">✕</button>
+                </div>
+                <div class="p-4 overflow-y-auto custom-scrollbar flex-1">
+                    <div class="overflow-x-auto rounded-lg border border-gray-200 shadow-sm bg-white">
+                        <table class="w-full text-left border-collapse min-w-[800px]">
+                            <thead class="bg-rose-100 text-rose-900 text-xs uppercase sticky top-0">
+                                <tr>
+                                    <th class="p-2 font-bold w-32">Date / N° FSE</th>
+                                    <th class="p-2 font-bold">Patient</th>
+                                    <th class="p-2 font-bold">Caisse / Mut.</th>
+                                    <th class="p-2 font-bold text-right w-24">Reste RO</th>
+                                    <th class="p-2 font-bold text-right w-24">Reste RC</th>
+                                    <th class="p-2 font-bold text-right w-28">Total Dû</th>
+                                </tr>
+                            </thead>
+                            <tbody id="impayesBilanBody" class="text-xs divide-y divide-gray-100">
+                                </tbody>
+                            <tfoot class="bg-rose-50 sticky bottom-0 border-t-2 border-rose-200">
+                                <tr>
+                                    <td colspan="5" class="p-3 text-right font-bold text-rose-900 uppercase">Total Sélection :</td>
+                                    <td class="p-3 text-right font-black text-rose-700 text-base font-mono" id="impayesBilanTotal">0.00 €</td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <datalist id="patientsList"></datalist>
+        <datalist id="caissesList"></datalist>
+        <datalist id="mutuellesList"></datalist>
+</div>
+
+<script>
+        // ==========================================
+        // 1. MOTEUR SUPABASE & INITIALISATION MULTI-CABINETS
+        // ==========================================
+        const supabaseUrl = 'https://clrxbtjeuwdwaeoipcum.supabase.co'; // <-- À remplacer
+        const supabaseKey = 'sb_publishable_2feu8kYSYTmjr2nfcGGx9A_wneUqXWM'; // <-- À remplacer
+        const supabaseClient = supabase.createClient(supabaseUrl, supabaseKey);
+
+        let cabinetActifId = null;
+        let cabinetEnCoursId = null;
+
+        let fseList = [];
+        let noemieList = [];
+        let praticiensList = [];
+        let retroList = [];
+        let customYears = [];
+        
+        // Données conservées en local
+        function getSafeArray(key) {
+            try { let data = JSON.parse(localStorage.getItem(key)); return Array.isArray(data) ? data : []; } 
+            catch(e) { return []; }
+        }
+
+        // Variables d'état
+        let currentEditId = null, currentNoemieEditId = null, currentRetroEditId = null, currentRegulRetroId = null, currentDreFseId = null; 
+        let fseCurrentSort = { col: 'date', order: 'desc' }, impSort = { col: 'mutuelle', order: 'asc' }; 
+        let noemieSortCol = 'date', noemieSortAsc = false;
+
+        const nomsMois = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"];
+        const colorClasses = { 'vert': 'bg-emerald-100 text-emerald-800 border-emerald-300', 'bleu': 'bg-blue-100 text-blue-800 border-blue-300', 'rose': 'bg-pink-100 text-pink-800 border-pink-300', 'violet': 'bg-purple-100 text-purple-800 border-purple-300', 'orange': 'bg-orange-100 text-orange-800 border-orange-300' };
+
+        // Mappeurs (Traduction + Injection du Cabinet Actif lors de la sauvegarde)
+        const mapFseToJs = (d) => ({ id: d.id, date: d.date, lot: d.lot, caisse: d.caisse, praticien: d.praticien, numFSE: d.num_fse, patient: d.patient, mutuelle: d.mutuelle, dre: d.dre, partRO: parseFloat(d.part_ro||0), partRC: parseFloat(d.part_rc||0), checkRO: d.check_ro, checkRC: d.check_rc, dateVirementRO: d.date_virement_ro||'', dateVirementRC: d.date_virement_rc||'', isLocked: d.is_locked, isRejet: d.is_rejet, motifRejet: d.motif_rejet||'', isDefacture: d.is_defacture, fseRemplacement: d.fse_remplacement||'', isDegrade: d.is_degrade });
+        const mapFseToDb = (j) => ({ id: j.id, cabinet_id: cabinetActifId, date: j.date, lot: j.lot, caisse: j.caisse, praticien: j.praticien, num_fse: j.numFSE, patient: j.patient, mutuelle: j.mutuelle, dre: j.dre, part_ro: j.partRO, part_rc: j.partRC, check_ro: j.checkRO, check_rc: j.checkRC, date_virement_ro: j.dateVirementRO, date_virement_rc: j.dateVirementRC, is_locked: j.isLocked, is_rejet: j.isRejet, motif_rejet: j.motifRejet, is_defacture: j.isDefacture, fse_remplacement: j.fseRemplacement, is_degrade: j.isDegrade });
+        
+        const mapNoemieToJs = (d) => ({ id: d.id, catNoemie: d.cat_noemie, catJustif: d.cat_justif, catReleve: d.cat_releve, praticien: d.praticien, dateNoemie: d.date_noemie, caisse: d.caisse, encaisseLe: d.encaisse_le||'', releve: d.releve||'', info: d.info||'', factures: d.factures, totalMontant: parseFloat(d.total_montant||0), dateImport: d.date_import });
+        const mapNoemieToDb = (j) => ({ id: j.id, cabinet_id: cabinetActifId, cat_noemie: j.catNoemie, cat_justif: j.catJustif, cat_releve: j.catReleve, praticien: j.praticien, date_noemie: j.dateNoemie, caisse: j.caisse, encaisse_le: j.encaisseLe, releve: j.releve, info: j.info, factures: j.factures, total_montant: j.totalMontant, date_import: j.dateImport });
+
+        // Démarrage : Vérification de la session Admin
+        window.addEventListener('DOMContentLoaded', async () => {
+            const currentMonthStr = String(new Date().getMonth() + 1).padStart(2, '0');
+            document.getElementById('monthFilter').value = currentMonthStr;
+            document.getElementById('fseDate').valueAsDate = new Date();
+            document.getElementById('n_date').valueAsDate = new Date();
+            
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            if (session) {
+                document.getElementById('ecran-login').classList.add('hidden');
+                document.getElementById('ecran-dashboard').classList.remove('hidden');
+                chargerCabinets();
+            } else {
+                document.getElementById('ecran-login').classList.remove('hidden');
+            }
+        });
+
+        // ==========================================
+        // GESTION DES CABINETS
+        // ==========================================
+        async function seConnecter() {
+            const email = document.getElementById('login-email').value;
+            const password = document.getElementById('login-password').value;
+            const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+            if (error) alert("Erreur : Identifiants incorrects.");
+            else {
+                document.getElementById('ecran-login').classList.add('hidden');
+                document.getElementById('ecran-dashboard').classList.remove('hidden');
+                chargerCabinets();
+            }
+        }
+
+        async function deconnecterAdmin() {
+            await supabaseClient.auth.signOut();
+            cabinetActifId = null;
+            document.getElementById('ecran-travail').classList.add('hidden');
+            document.getElementById('ecran-dashboard').classList.add('hidden');
+            document.getElementById('ecran-login').classList.remove('hidden');
+        }
+
+        async function chargerCabinets() {
+            const { data, error } = await supabaseClient.from('cabinets').select('*').order('nom');
+            if (error) return console.error(error);
+            
+            const container = document.getElementById('liste-cabinets');
+            container.innerHTML = '';
+            data.forEach(cab => {
+                container.innerHTML += `
+                    <div onclick="demanderCode('${cab.id}', '${cab.nom.replace(/'/g, "\\'")}')" class="bg-white p-6 rounded-xl shadow-md border-t-4 border-teal-500 cursor-pointer hover:-translate-y-1 hover:shadow-lg transition">
+                        <h3 class="text-xl font-bold text-gray-800 mb-2">${cab.nom}</h3>
+                        <p class="text-sm font-bold text-teal-600 flex items-center gap-1">🔒 Déverrouiller ➔</p>
+                    </div>`;
+            });
+        }
+
+        async function creerCabinet() {
+            const nom = document.getElementById('nouveau-cabinet-nom').value;
+            const code = document.getElementById('nouveau-cabinet-code').value;
+            if(!nom || !code) return alert("Veuillez remplir le nom et le code d'accès.");
+            
+            const { error } = await supabaseClient.from('cabinets').insert([{ nom, code_acces: code }]);
+            if (error) alert("Erreur lors de la création.");
+            else {
+                document.getElementById('nouveau-cabinet-nom').value = '';
+                document.getElementById('nouveau-cabinet-code').value = '';
+                chargerCabinets();
+            }
+        }
+
+        function demanderCode(id, nom) {
+            cabinetEnCoursId = id;
+            document.getElementById('nom-cabinet-selectionne').innerText = nom;
+            document.getElementById('saisie-code-acces').value = '';
+            document.getElementById('modal-code').classList.remove('hidden');
+            setTimeout(() => document.getElementById('saisie-code-acces').focus(), 100);
+        }
+        
+        function fermerModalCode() { document.getElementById('modal-code').classList.add('hidden'); }
+
+        async function validerCode() {
+            const codeSaisi = document.getElementById('saisie-code-acces').value;
+            const { data } = await supabaseClient.from('cabinets').select('code_acces').eq('id', cabinetEnCoursId).single();
+            
+            if (data && data.code_acces === codeSaisi) {
+                cabinetActifId = cabinetEnCoursId;
+                fermerModalCode();
+                document.getElementById('ecran-dashboard').classList.add('hidden');
+                document.getElementById('ecran-travail').classList.remove('hidden');
+                chargerDonneesCabinet(); 
+            } else alert("Code d'accès incorrect pour ce cabinet.");
+        }
+
+        function retourDashboard() {
+            cabinetActifId = null;
+            document.getElementById('ecran-travail').classList.add('hidden');
+            document.getElementById('ecran-dashboard').classList.remove('hidden');
+        }
+
+        // Chargement Cloisonné
+        async function chargerDonneesCabinet() {
+            document.body.style.cursor = 'wait';
+            
+            // On isole les données locales (Rétro) par cabinet !
+            retroList = getSafeArray('retro_data_' + cabinetActifId);
+            customYears = getSafeArray('custom_years_' + cabinetActifId);
+
+            const [resFse, resNoemie, resPrat] = await Promise.all([
+                supabaseClient.from('fse').select('*').eq('cabinet_id', cabinetActifId),
+                supabaseClient.from('noemie').select('*').eq('cabinet_id', cabinetActifId),
+                supabaseClient.from('praticiens_suivi').select('*').eq('cabinet_id', cabinetActifId)
+            ]);
+
+            if (resFse.data) fseList = resFse.data.map(mapFseToJs); else fseList = [];
+            if (resNoemie.data) noemieList = resNoemie.data.map(mapNoemieToJs); else noemieList = [];
+            
+            if (resPrat.data && resPrat.data.length > 0) {
+                praticiensList = resPrat.data;
+            } else {
+                praticiensList = [{ id: '1', cabinet_id: cabinetActifId, name: 'Praticien 1', color: 'vert' }];
+                await supabaseClient.from('praticiens_suivi').upsert(praticiensList);
+            }
+
+            populateSelects();
+            updateYearsDatalist(); 
+            updateDatalists(); 
+            render(); 
+            renderNoemieTable();
+            document.body.style.cursor = 'default';
+        }
+
+        // ==========================================
+        // 2. FONCTIONS DE REQUÊTES SUPABASE (PONT)
+        // ==========================================
+        async function dbUpdateFse(fseObj) { await supabaseClient.from('fse').upsert(mapFseToDb(fseObj)); }
+        async function dbDeleteFse(id) { await supabaseClient.from('fse').delete().eq('id', id); }
+        async function dbUpdateNoemie(noemieObj) { await supabaseClient.from('noemie').upsert(mapNoemieToDb(noemieObj)); }
+        function checkAndLockFSE(item) { const roV = (item.partRO === 0) || (item.checkRO === true), rcV = (item.partRC === 0) || (item.checkRC === true); if (roV && rcV) item.isLocked = true; }
+
+        function getPraticienBadge(pName) {
+            if(!pName || pName === '-') return `<span class="text-gray-500 font-semibold">-</span>`;
+            const pObj = praticiensList.find(p => p.name === pName);
+            const cl = pObj ? colorClasses[pObj.color] : colorClasses['bleu'];
+            return `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold border shadow-sm ${cl}">` + pName + `</span>`;
+        }
+
+        // ==========================================
+        // 3. INTERFACE & NAVIGATION
+        // ==========================================
+        function switchPage(pageId) {
+            ['dashboardPage', 'noemiePage', 'retrosPage'].forEach(id => document.getElementById(id).classList.add('page-hidden'));
+            document.getElementById(pageId).classList.remove('page-hidden');
+            const btnDash = document.getElementById('navDashboard'), btnNoemie = document.getElementById('navNoemie'), btnRetros = document.getElementById('navRetros');
+            const btnNewFse = document.getElementById('btnNewFse'), btnNewNoemie = document.getElementById('btnNewNoemie'), btnNewRetro = document.getElementById('btnNewRetro');
+            
+            btnDash.className = btnNoemie.className = btnRetros.className = "px-3 py-1.5 text-sm font-semibold rounded text-teal-200 hover:text-white hover:bg-teal-600/50 transition whitespace-nowrap";
+            btnNewFse.classList.add('hidden'); btnNewNoemie.classList.add('hidden'); btnNewRetro.classList.add('hidden');
+
+            if(pageId === 'dashboardPage') { btnDash.classList.add('bg-teal-600', 'text-white'); btnDash.classList.remove('text-teal-200'); btnNewFse.classList.remove('hidden'); render(); } 
+            else if (pageId === 'noemiePage') { btnNoemie.classList.add('bg-teal-600', 'text-white'); btnNoemie.classList.remove('text-teal-200'); btnNewNoemie.classList.remove('hidden'); if(document.getElementById('noemieFacturesList').children.length === 0) addNoemieFactureRow(); renderNoemieTable(); } 
+            else if (pageId === 'retrosPage') { btnRetros.classList.add('bg-teal-600', 'text-white'); btnRetros.classList.remove('text-teal-200'); btnNewRetro.classList.remove('hidden'); renderRetros(); }
+        }
+
+        function updateDatalists() {
+            const patients = [...new Set(fseList.map(f => f.patient).filter(Boolean))].sort();
+            const caisses = [...new Set([...fseList.map(f => f.caisse), ...noemieList.map(n => n.caisse)].filter(c => c && c !== '-'))].sort();
+            const mutuelles = [...new Set(fseList.map(f => f.mutuelle).filter(m => m && m !== 'AMO seule'))].sort();
+
+            document.getElementById('patientsList').innerHTML = patients.map(p => `<option value="${p}">`).join('');
+            document.getElementById('caissesList').innerHTML = caisses.map(c => `<option value="${c}">`).join('');
+            document.getElementById('mutuellesList').innerHTML = mutuelles.map(m => `<option value="${m}">`).join('');
+            
+            const sNoemieCaisse = document.getElementById('sNoemieCaisse'); 
+            if (sNoemieCaisse) {
+                const curNoemieCaisse = sNoemieCaisse.value;
+                sNoemieCaisse.innerHTML = '<option value="">Toutes Caisses</option>'; 
+                caisses.forEach(c => sNoemieCaisse.innerHTML += `<option value="${c}">${c}</option>`); 
+                sNoemieCaisse.value = curNoemieCaisse || '';
+            }
+        }
+
+        function updateActivePraticienLabels() {
+            const gPrat = document.getElementById('globalPraticienFilter').value; const pName = gPrat !== 'ALL' ? gPrat : praticiensList[0].name;
+            const lblForm = document.getElementById('lblFormPraticien'), lblNoemie = document.getElementById('lblNoemiePraticien');
+            if(lblForm) lblForm.innerText = pName; if(lblNoemie) lblNoemie.innerText = pName;
+        }
+
+        function populateSelects() {
+            const gPrat = document.getElementById('globalPraticienFilter'); const curPrat = gPrat.value;
+            gPrat.innerHTML = '<option value="ALL">👨‍⚕️ Tous les Praticiens</option>';
+            praticiensList.forEach(p => gPrat.innerHTML += `<option value="${p.name}">${p.name}</option>`);
+            gPrat.value = praticiensList.find(p=>p.name===curPrat) ? curPrat : 'ALL'; updateActivePraticienLabels();
+        }
+
+        function updateYearsDatalist() {
+            let years = new Set();
+            fseList.forEach(f => { if(f.date) years.add(f.date.substring(0,4)); });
+            noemieList.forEach(n => { if(n.dateNoemie) years.add(n.dateNoemie.substring(0,4)); });
+            retroList.forEach(r => { if(r.annee) years.add(r.annee.toString()); });
+            customYears.forEach(y => years.add(y.toString()));
+            years.add(new Date().getFullYear().toString());
+
+            const sortedYears = Array.from(years).sort((a,b) => b - a);
+            const yFilter = document.getElementById('yearFilter');
+            const currentVal = yFilter.value;
+            
+            yFilter.innerHTML = '<option value="ALL">🗓️ Toutes années</option>';
+            sortedYears.forEach(y => yFilter.innerHTML += `<option value="${y}">${y}</option>`);
+            
+            if(currentVal && currentVal !== "ALL" && sortedYears.includes(currentVal)) { yFilter.value = currentVal; } 
+            else { yFilter.value = new Date().getFullYear().toString(); }
+        }
+
+        function addCustomYear() {
+            const y = prompt("Entrez la nouvelle année (ex: 2025) :");
+            if(y && /^\d{4}$/.test(y) && !customYears.includes(y)) { customYears.push(y); localStorage.setItem('custom_years' + cabinetActifId, JSON.stringify(customYears)); updateYearsDatalist(); document.getElementById('yearFilter').value = y; triggerAllRenders(); }
+        }
+
+        function triggerAllRenders() {
+            render(); renderNoemieTable();
+            if(!document.getElementById('retrosPage').classList.contains('hidden')) renderRetros();
+            if(!document.getElementById('impayesModal').classList.contains('hidden')) renderImpayesTable();
+            if(!document.getElementById('recapModal').classList.contains('hidden')) renderRecapAnnuel();
+        }
+
+        // Écouteurs globaux
+        document.getElementById('globalPraticienFilter').addEventListener('change', () => { updateActivePraticienLabels(); triggerAllRenders(); });
+        document.getElementById('yearFilter').addEventListener('change', () => { triggerAllRenders(); });
+        document.getElementById('monthFilter').addEventListener('change', () => { render(); });
+        ['searchDate','searchPraticien','searchLot','searchNumFSE','searchPatient','searchMutuelle','searchCheckRO','searchCheckRC'].forEach(id => { document.getElementById(id).addEventListener(id.includes('Check') ? 'change' : 'input', render); });
+        ['sNoemieDate','sNoemiePraticien','sNoemieCaisse','sNoemieFSE','sNoemieMontant','sNoemieEncaisse','sNoemieReleve','sNoemieInfo'].forEach(id => { const el = document.getElementById(id); if(el) el.addEventListener(id==='sNoemieCaisse' ? 'change' : 'input', renderNoemieTable); });
+        document.getElementById('cat_releve').addEventListener('change', function() { if(this.checked) document.getElementById('n_encaisse').value = document.getElementById('n_date').value; });
+
+        // ==========================================
+        // 4. GESTION DES FSE (SAISIE & MODIFICATION)
+        // ==========================================
+        function openFseModal() { resetFseFormState(); document.getElementById('fseModal').classList.remove('hidden'); setTimeout(() => document.getElementById('fseLot').focus(), 100); }
+        function closeFseModal() { document.getElementById('fseModal').classList.add('hidden'); }
+        function setSort(col) { if (fseCurrentSort.col === col) fseCurrentSort.order = fseCurrentSort.order === 'asc' ? 'desc' : 'asc'; else { fseCurrentSort.col = col; fseCurrentSort.order = 'desc'; } render(); }
+
+        function updateNbFseRows() {
+            let nb = parseInt(document.getElementById('nbFseToAdd').value) || 1; document.getElementById('fseFacturesList').innerHTML = ''; for(let i=0; i<nb; i++) addFseRow();
+        }
+
+        function addFseRow(fseNum='', patient='', ro='', rc='') {
+            const container = document.getElementById('fseFacturesList');
+            const row = document.createElement('div');
+            row.className = "flex items-center gap-1.5 fse-row bg-white p-1 rounded border border-indigo-100 shadow-sm mb-1";
+            row.innerHTML = `
+                <input type="text" value="${fseNum}" class="fse-num-input w-24 border border-indigo-200 rounded p-1 text-xs font-mono focus:ring-indigo-500 shadow-inner" placeholder="N°">
+                <input type="text" value="${patient}" list="patientsList" class="fse-patient-input flex-1 min-w-[150px] border border-indigo-200 rounded p-1 text-xs focus:ring-indigo-500 shadow-inner" placeholder="Nom Prénom *">
+                <input type="text" inputmode="decimal" value="${ro}" oninput="updateFseTotals()" class="fse-ro-input w-20 border border-teal-300 rounded p-1 text-xs font-bold text-teal-700 focus:ring-teal-500 shadow-inner" placeholder="0.00">
+                <input type="text" inputmode="decimal" value="${rc}" oninput="updateFseTotals()" class="fse-rc-input w-20 border border-indigo-300 rounded p-1 text-xs font-bold text-indigo-700 focus:ring-indigo-500 shadow-inner" placeholder="0.00">
+                <button type="button" onclick="this.parentElement.remove(); updateFseTotals();" class="w-6 text-rose-500 hover:text-rose-700 font-bold p-1 bg-rose-50 rounded transition text-lg leading-none outline-none" tabindex="-1">×</button>
+            `;
+            container.appendChild(row); updateFseTotals();
+        }
+
+        function updateFseTotals() {
+            let tRO = 0, tRC = 0;
+            document.querySelectorAll('#fseFacturesList .fse-row').forEach(row => {
+                const ro = parseFloat((row.querySelector('.fse-ro-input').value || '0').replace(',', '.').replace(/\s/g, '')) || 0;
+                const rc = parseFloat((row.querySelector('.fse-rc-input').value || '0').replace(',', '.').replace(/\s/g, '')) || 0;
+                tRO += ro; tRC += rc;
+            });
+            const elRO = document.getElementById('fseLiveTotalRO'), elRC = document.getElementById('fseLiveTotalRC'), elGlobal = document.getElementById('fseLiveTotalGlobal');
+            if(elRO) elRO.innerText = tRO.toFixed(2); if(elRC) elRC.innerText = tRC.toFixed(2); if(elGlobal) elGlobal.innerText = (tRO + tRC).toFixed(2);
+        }
+
+        function resetFseFormState() {
+            currentEditId = null; document.getElementById('submitBtnFse').innerText = "Enregistrer le Lot"; document.getElementById('fseFormTitle').innerText = "Saisie d'un Lot de Facturation";
+            const gPrat = document.getElementById('globalPraticienFilter').value; let targetPraticien = gPrat !== 'ALL' ? gPrat : (praticiensList.length > 0 ? praticiensList[0].name : '');
+            let lastLotText = "-";
+            if (fseList.length > 0 && targetPraticien) {
+                let validFses = fseList.filter(f => !f.isDefacture && f.lot && f.lot !== '-' && f.praticien === targetPraticien);
+                if (validFses.length > 0) {
+                    let maxLot = Math.max(...validFses.map(f => parseInt(f.lot) || 0));
+                    if(maxLot > 0) lastLotText = maxLot.toString();
+                    else lastLotText = [...validFses].sort((a,b) => new Date(b.date) - new Date(a.date))[0].lot;
+                }
+            }
+            const lastLotSpan = document.getElementById('lastLotInfo'); if (lastLotSpan) lastLotSpan.innerText = lastLotText;
+            document.getElementById('fseLot').value = ''; document.getElementById('fseDegradeLot').checked = false; document.getElementById('fseCaisse').value = ''; document.getElementById('nbFseToAdd').value = 1; document.getElementById('fseFacturesList').innerHTML = '';
+            addFseRow(); updateActivePraticienLabels();
+        }
+
+        // ==========================================
+        // ENVOI D'UN NOUVEAU LOT FSE VERS SUPABASE
+        // ==========================================
+        async function saveFSE(e) {
+            e.preventDefault();
+            const lotDate = document.getElementById('fseDate').value, lotNum = document.getElementById('fseLot').value || '-', lotCaisse = document.getElementById('fseCaisse').value || '-';
+            const isLotDegrade = document.getElementById('fseDegradeLot').checked;
+            const gPrat = document.getElementById('globalPraticienFilter').value;
+            let targetPraticien = gPrat !== 'ALL' ? gPrat : (praticiensList.length > 0 ? praticiensList[0].name : 'Praticien 1');
+
+            if (currentEditId) {
+                const existing = fseList.find(f => f.id === currentEditId);
+                if(existing && existing.praticien) targetPraticien = existing.praticien;
+            }
+
+            const rows = document.querySelectorAll('#fseFacturesList .fse-row');
+            let itemsToUpsert = [];
+
+            rows.forEach(row => {
+                const num = row.querySelector('.fse-num-input').value.trim().toUpperCase();
+                const pat = row.querySelector('.fse-patient-input').value.trim();
+                const ro = parseFloat((row.querySelector('.fse-ro-input').value || '0').replace(',', '.').replace(/\s/g, '')) || 0;
+                const rc = parseFloat((row.querySelector('.fse-rc-input').value || '0').replace(',', '.').replace(/\s/g, '')) || 0;
+                
+                if (num || pat || ro > 0 || rc > 0) {
+                    if (currentEditId) {
+                        const item = fseList.find(f => f.id === currentEditId);
+                        if (item) {
+                            item.numFSE = num || '-'; item.patient = pat || 'Inconnu';
+                            item.partRO = ro; item.partRC = rc;
+                            item.date = lotDate; item.lot = lotNum; item.caisse = lotCaisse;
+                            item.isDegrade = isLotDegrade;
+                            item.isLocked = (item.checkRO && item.checkRC);
+                            itemsToUpsert.push(item);
+                        }
+                    } else {
+                        const newItem = {
+                            id: Date.now().toString() + Math.random().toString(36).substr(2, 5),
+                            date: lotDate, lot: lotNum, caisse: lotCaisse, praticien: targetPraticien,
+                            numFSE: num || '-', patient: pat || 'Inconnu',
+                            mutuelle: rc === 0 ? 'ALD' : 'AMO seule', dre: '-', // ALD Automatique
+                            partRO: ro, partRC: rc, checkRO: (ro === 0), checkRC: (rc === 0),
+                            dateVirementRO: null, dateVirementRC: null, isLocked: (ro === 0 && rc === 0),
+                            isRejet: false, motifRejet: null, isDefacture: false, fseRemplacement: null, isDegrade: isLotDegrade
+                        };
+                        itemsToUpsert.push(newItem);
+                        fseList.push(newItem);
+                    }
+                }
+            });
+
+            if (itemsToUpsert.length === 0) return;
+
+        document.body.style.cursor = 'wait';
+        // On capture la réponse de Supabase pour vérifier s'il y a une erreur
+        const { error } = await supabaseClient.from('fse').upsert(itemsToUpsert.map(mapFseToDb));
+        document.body.style.cursor = 'default';
+
+        // Si une erreur survient, on bloque tout et on affiche le problème !
+        if (error) {
+            console.error("Détails du refus Supabase :", error);
+            alert("❌ Supabase a refusé la sauvegarde !\nRaison : " + error.message);
+            return; // On arrête la fonction ici pour ne pas créer l'illusion que c'est enregistré
+        }
+
+        render(); updateYearsDatalist(); updateDatalists();
+            const wasEditing = (currentEditId !== null);
+            resetFseFormState();
+            if (!wasEditing) document.getElementById('fseLot').focus();
+            else { document.getElementById('fseModal').classList.add('hidden'); currentEditId = null; }
+        }
+
+        // ==========================================
+        // ACTIONS RAPIDES SUR LES FSE (AVEC SUPABASE)
+        // ==========================================
+        async function toggleCheck(id, type) {
+            const item = fseList.find(f => f.id === id);
+            if (item && !item.isLocked && !item.isDefacture) { 
+                if (type === 'RO') item.checkRO = !item.checkRO; if (type === 'RC') item.checkRC = !item.checkRC; 
+                checkAndLockFSE(item); await dbUpdateFse(item); render(); 
+            }
+        }
+        async function updateVirement(id, type, dateValue) {
+            const item = fseList.find(f => f.id === id);
+            if (item && !item.isLocked && !item.isDefacture) { 
+                if (type === 'RO') item.dateVirementRO = dateValue; if (type === 'RC') item.dateVirementRC = dateValue; 
+                await dbUpdateFse(item); render(); 
+            }
+        }
+        async function updateMutuelleRapide(id, newMutuelle) {
+            const item = fseList.find(f => f.id === id);
+            if (item) { item.mutuelle = newMutuelle; await dbUpdateFse(item); render(); }
+        }
+        async function toggleLock(id) { const item = fseList.find(f => f.id === id); if (item) { item.isLocked = !item.isLocked; await dbUpdateFse(item); render(); } }
+        
+        async function toggleLotDegrade(lotKey, isChecked) {
+            let toUpdate = [];
+            fseList.forEach(f => {
+                let key = `${f.date}_${f.lot}_${f.caisse}_${f.praticien}`;
+                if (key === lotKey && !f.isLocked && !f.isDefacture) { f.isDegrade = isChecked; toUpdate.push(mapFseToDb(f)); }
+            });
+            if(toUpdate.length > 0) await supabaseClient.from('fse').upsert(toUpdate);
+            render();
+        }
+
+        async function toggleRejet(id) {
+            const item = fseList.find(f => f.id === id);
+            if (item && !item.isLocked && !item.isDefacture) { 
+                if (!item.isRejet) { let motif = prompt("Motif du rejet :"); if (motif !== null) { item.isRejet = true; item.motifRejet = motif || "Non précisé"; } } 
+                else { item.isRejet = false; item.motifRejet = ""; }
+                await dbUpdateFse(item); render(); 
+            }
+        }
+        function showRejetMotif(id) { const item = fseList.find(f => f.id === id); if (item && item.isRejet) alert("Motif de rejet :\n" + item.motifRejet); }
+
+        async function toggleDefacture(id) {
+            const item = fseList.find(f => f.id === id);
+            if (item && !item.isLocked) { 
+                if(!item.isDefacture) {
+                    let remp = prompt("Facture Défacturée/Annulée.\nEntrez un N° de FSE de remplacement (optionnel) :");
+                    if(remp !== null) { item.isDefacture = true; item.fseRemplacement = remp || ""; item.checkRO = false; item.checkRC = false; }
+                } else { item.isDefacture = false; item.fseRemplacement = ""; }
+                await dbUpdateFse(item); render(); 
+            }
+        }
+
+        function editFSE(id) {
+            const item = fseList.find(f => f.id === id); if (!item || item.isLocked || item.isDefacture) return;
+            currentEditId = id; const lbl = document.getElementById('lblFormPraticien'); if (lbl) lbl.innerText = item.praticien || '-';
+            document.getElementById('fseDate').value = item.date; document.getElementById('fseCaisse').value = item.caisse !== '-' ? item.caisse : ''; document.getElementById('fseLot').value = item.lot !== '-' ? item.lot : '';
+            document.getElementById('fseDegradeLot').checked = item.isDegrade || false;
+            document.getElementById('nbFseToAdd').value = 1; document.getElementById('fseFacturesList').innerHTML = '';
+            addFseRow(item.numFSE !== '-' ? item.numFSE : '', item.patient, item.partRO || '', item.partRC || '');
+            document.getElementById('submitBtnFse').innerText = "Mettre à jour la FSE"; document.getElementById('fseFormTitle').innerText = "Modifier la Facturation"; document.getElementById('fseModal').classList.remove('hidden');
+        }
+
+        async function deleteFSE(id) {
+            const item = fseList.find(f => f.id === id); if (item && item.isLocked) return;
+            if(confirm("Supprimer définitivement cette facture ?\nPour annuler comptablement, utilisez plutôt la case 'Défact.'")) { 
+                fseList = fseList.filter(f => f.id !== id); await dbDeleteFse(id); render(); updateDatalists(); updateYearsDatalist(); 
+            }
+        }
+
+        function openDreModal(fseId) {
+            const item = fseList.find(f => f.id === fseId); if(!item || item.isLocked || item.isDefacture) return;
+            currentDreFseId = fseId; 
+            document.getElementById('dreModalPatientName').innerText = item.patient || 'Inconnu'; document.getElementById('dreModalFseNum').innerText = item.numFSE !== '-' ? item.numFSE : 'Non renseigné';
+            document.getElementById('dreModal_mutuelle').value = item.mutuelle !== 'AMO seule' ? item.mutuelle : ''; document.getElementById('dreModal_num').value = item.dre !== '-' ? item.dre : ''; 
+            document.getElementById('dreModal').classList.remove('hidden'); setTimeout(() => document.getElementById('dreModal_num').focus(), 100);
+        }
+        function closeDreModal() { document.getElementById('dreModal').classList.add('hidden'); currentDreFseId = null; }
+
+        async function saveDreAction() {
+            if(!currentDreFseId) return;
+            const mut = document.getElementById('dreModal_mutuelle').value.trim(), num = document.getElementById('dreModal_num').value.trim();
+            const item = fseList.find(f => f.id === currentDreFseId);
+            if(item) { item.mutuelle = mut || 'AMO seule'; item.dre = num || '-'; await dbUpdateFse(item); render(); updateDatalists(); }
+            closeDreModal();
+        }
+
+        // ==========================================
+        // AFFICHAGE PRINCIPAL FSE (RENDER)
+        // ==========================================
+        function render() {
+            const tbody = document.getElementById('fseTableBody');
+            const gPrat = document.getElementById('globalPraticienFilter').value, filterYear = document.getElementById('yearFilter').value, filterMonth = document.getElementById('monthFilter').value;
+            const sDate = document.getElementById('searchDate').value.toLowerCase(), sPraticien = document.getElementById('searchPraticien').value.toLowerCase(), sLot = document.getElementById('searchLot').value.toLowerCase();
+            const sNumFSE = document.getElementById('searchNumFSE').value.toLowerCase(), sPatient = document.getElementById('searchPatient').value.toLowerCase(), sMutuelle = document.getElementById('searchMutuelle').value.toLowerCase();
+            const sCheckRO = document.getElementById('searchCheckRO').value, sCheckRC = document.getElementById('searchCheckRC').value;
+
+            let filteredFse = fseList.filter(f => {
+                if (gPrat !== 'ALL' && f.praticien !== gPrat) return false;
+                if (filterYear !== 'ALL' && f.date.substring(0,4) !== filterYear) return false;
+                if (filterMonth !== 'ALL' && f.date.split('-')[1] !== filterMonth) return false;
+                
+                if (sDate && !new Date(f.date).toLocaleDateString('fr-FR').toLowerCase().includes(sDate)) return false;
+                if (sPraticien && !(f.praticien || '-').toLowerCase().includes(sPraticien)) return false;
+                if (sLot && !(f.lot.toLowerCase().includes(sLot) || f.caisse.toLowerCase().includes(sLot))) return false;
+                if (sNumFSE && !(f.numFSE || '').toLowerCase().includes(sNumFSE)) return false;
+                if (sPatient && !f.patient.toLowerCase().includes(sPatient)) return false;
+                if (sMutuelle && !(f.mutuelle.toLowerCase().includes(sMutuelle) || (f.dre && f.dre.toLowerCase().includes(sMutuelle)))) return false;
+                if (sCheckRO !== 'ALL' && (sCheckRO === 'VAL' ? !f.checkRO : f.checkRO)) return false;
+                if (sCheckRC !== 'ALL' && (sCheckRC === 'VAL' ? !f.checkRC : f.checkRC)) return false;
+                return true;
+            });
+
+            let lotsMap = {}; 
+            let gSoins = 0, gSoinsRO = 0, gSoinsRC = 0, gPercu = 0, gPercuRO = 0, gPercuRC = 0, gDu = 0, gDuRO = 0, gDuRC = 0;
+
+            filteredFse.forEach(fse => {
+                if (!fse.isDefacture) {
+                    const rembRO = fse.checkRO ? fse.partRO : 0; const rembRC = fse.checkRC ? fse.partRC : 0;
+                    gSoinsRO += fse.partRO; gSoinsRC += fse.partRC; gSoins += (fse.partRO + fse.partRC);
+                    gPercuRO += rembRO; gPercuRC += rembRC; gPercu += (rembRO + rembRC);
+                    gDuRO += (fse.partRO - rembRO); gDuRC += (fse.partRC - rembRC); gDu += ((fse.partRO + fse.partRC) - (rembRO + rembRC));
+                }
+                let key = `${fse.date}_${fse.lot}_${fse.caisse}_${fse.praticien}`;
+                if (!lotsMap[key]) lotsMap[key] = { key: key, date: fse.date, lot: fse.lot, caisse: fse.caisse, praticien: fse.praticien, fses: [], tRO: 0, tRC: 0, pRO: 0, pRC: 0, isAllDefac: true, isDegrade: false };
+                lotsMap[key].fses.push(fse);
+                if (!fse.isDefacture) { 
+                    lotsMap[key].tRO += fse.partRO; lotsMap[key].tRC += fse.partRC; lotsMap[key].pRO += fse.checkRO ? fse.partRO : 0; lotsMap[key].pRC += fse.checkRC ? fse.partRC : 0; 
+                    lotsMap[key].isAllDefac = false; if (fse.isDegrade) lotsMap[key].isDegrade = true; 
+                }
+            });
+
+            let lotsArray = Object.values(lotsMap);
+            lotsArray.sort((a, b) => {
+                let valA, valB;
+                switch (fseCurrentSort.col) {
+                    case 'praticien': valA = a.praticien; valB = b.praticien; break;
+                    case 'lot': valA = a.lot; valB = b.lot; break;
+                    case 'date': default: valA = new Date(a.date).getTime(); valB = new Date(b.date).getTime(); break;
+                }
+                if(valA < valB) return fseCurrentSort.order === 'asc' ? -1 : 1;
+                if(valA > valB) return fseCurrentSort.order === 'asc' ? 1 : -1;
+                if(fseCurrentSort.col === 'date') { if (a.lot < b.lot) return 1; if (a.lot > b.lot) return -1; }
+                return 0;
+            });
+
+            tbody.innerHTML = ''; document.getElementById('emptyState').classList.toggle('hidden', lotsArray.length > 0);
+
+            lotsArray.forEach(lot => {
+                const dLot = new Date(lot.date).toLocaleDateString('fr-FR', {day: '2-digit', month: '2-digit', year: 'numeric'}), badgePrat = getPraticienBadge(lot.praticien), tGlobal = lot.tRO + lot.tRC, pGlobal = lot.pRO + lot.pRC, dGlobal = tGlobal - pGlobal, nbActes = lot.fses.length;
+                let lotBg = lot.isAllDefac ? "bg-gray-100 text-gray-400" : "bg-gray-200/60";
+
+                const trLot = document.createElement('tr'); trLot.className = `border-t-4 border-gray-300 font-bold ${lotBg}`;
+                trLot.innerHTML = `
+                    <td class="p-2"><div class="flex items-center gap-1.5"><input type="checkbox" onchange="toggleLotDegrade('${lot.key}', this.checked)" ${lot.isDegrade ? 'checked' : ''} class="w-3.5 h-3.5 text-blue-600 rounded cursor-pointer"><span>${dLot}</span></div></td>
+                    <td class="p-2 truncate max-w-[100px]">${badgePrat}</td><td class="p-2"><div class="text-gray-800">${lot.lot}</div><div class="text-[10px] text-teal-700 truncate max-w-[100px]">${lot.caisse}</div></td>
+                    <td class="p-2 text-center" colspan="3"><span class="px-2 py-0.5 rounded bg-gray-300 text-gray-700 text-[10px] shadow-sm">${nbActes} Facture(s)</span></td>
+                    <td class="p-2 text-right text-teal-700 font-mono">${lot.tRO.toFixed(2)}€</td><td colspan="2"></td><td class="p-2 text-right text-indigo-700 font-mono">${lot.tRC.toFixed(2)}€</td><td colspan="2"></td>
+                    <td class="p-2 text-right font-mono text-gray-800">${tGlobal.toFixed(2)}€</td><td class="p-2 text-right font-mono ${dGlobal > 0 ? 'text-rose-600' : 'text-emerald-700'}">${dGlobal.toFixed(2)}€</td><td></td>
+                `;
+                tbody.appendChild(trLot);
+
+                let fsesSorted = lot.fses.sort((a,b) => (a.numFSE || '').localeCompare(b.numFSE || ''));
+                
+                fsesSorted.forEach(f => {
+                    const isDefac = f.isDefacture, isDeg = f.isDegrade, isLocked = f.isLocked || false;
+                    const tFSE = isDefac ? 0 : (f.partRO + f.partRC), pFSE = isDefac ? 0 : ((f.checkRO ? f.partRO : 0) + (f.checkRC ? f.partRC : 0)), dFSE = isDefac ? 0 : (tFSE - pFSE);
+                    const vRO = f.dateVirementRO || "", vRC = f.dateVirementRC || "";
+                    
+                    let rowClass = 'bg-white hover:bg-gray-50 transition';
+                    if (isDefac) rowClass = 'bg-gray-50/50 opacity-60'; else if (f.isRejet) rowClass = 'bg-red-100 hover:bg-red-200 transition'; else if (dFSE === 0) rowClass = 'bg-emerald-100 hover:bg-emerald-200 transition'; else if (f.checkRO || f.checkRC || vRO || vRC) rowClass = 'bg-orange-100 hover:bg-orange-200 transition'; 
+
+                    let txtClass = isDefac ? 'line-through text-gray-400' : (isDeg ? 'text-blue-600 font-medium' : 'text-gray-800');
+                    let isInJustif = noemieList.some(n => n.catJustif && n.factures && n.factures.some(fact => fact.fse === f.numFSE));
+                    
+                    let roAmountClass = (f.checkRO && isInJustif && !isDefac) ? 'text-yellow-600 bg-yellow-100 px-1 rounded font-black' : txtClass;
+                    let rcAmountClass = (f.checkRC && isInJustif && !isDefac) ? 'text-yellow-600 bg-yellow-100 px-1 rounded font-black' : txtClass;
+                    let roBtnClass = f.checkRO ? (isInJustif && !isDefac ? 'bg-yellow-400 text-gray-900' : 'bg-emerald-600 text-white') : 'bg-gray-200 text-gray-600';
+                    let rcBtnClass = f.checkRC ? (isInJustif && !isDefac ? 'bg-yellow-400 text-gray-900' : 'bg-indigo-600 text-white') : 'bg-gray-200 text-gray-600';
+
+                    // --- MENU DÉROULANT MUTUELLE & AUTO-CORRECTION ---
+                    if (f.partRC === 0 && f.mutuelle === 'AMO seule') { f.mutuelle = 'ALD'; dbUpdateFse(f); }
+
+                    const exoTypes = ['ALD', 'AT', 'Exo', 'Exo_Mat'];
+                    let mutAffichage = '';
+                    
+                    if (exoTypes.includes(f.mutuelle) && !isDefac && !isLocked) {
+                        let selOptions = exoTypes.map(o => `<option value="${o}" ${f.mutuelle === o ? 'selected' : ''}>${o}</option>`).join('');
+                        mutAffichage = `
+                            <select onchange="updateMutuelleRapide('${f.id}', this.value)" class="text-xs font-bold text-teal-800 bg-teal-50 border border-teal-200 rounded px-1 py-0.5 cursor-pointer focus:ring-2 focus:ring-teal-400 outline-none w-[90px] transition-colors hover:bg-teal-100 shadow-sm ${txtClass}">
+                                ${selOptions}
+                            </select>
+                            <div class="text-[9px] text-indigo-500 font-bold mt-0.5">${f.dre !== '-' ? 'DRE:'+f.dre : ''}</div>
+                        `;
+                    } else {
+                        mutAffichage = `<div class="text-gray-700 truncate max-w-[100px] ${txtClass}">${f.mutuelle}</div><div class="text-[9px] text-indigo-500 font-bold">${f.dre !== '-' ? 'DRE:'+f.dre : ''}</div>`;
+                    }
+
+                    let actionDreBtn = (!isDefac && !isLocked && f.partRC > 0 && (f.dre === '-' || !f.dre) && f.mutuelle === 'AMO seule') ? `<button onclick="openDreModal('${f.id}')" class="text-[9px] font-bold bg-indigo-100 text-indigo-700 px-1 py-0.5 rounded border border-indigo-300 shadow-sm hover:bg-indigo-200">+ DRE</button>` : '';
+
+                    const tr = document.createElement('tr'); tr.className = `border-b border-gray-100 ${rowClass}`;
+                    tr.innerHTML = `
+                        <td colspan="3" class="text-left pl-2"><div class="flex items-center justify-start gap-3"><div class="flex items-center gap-0.5"><label class="inline-flex items-center cursor-pointer" title="Rejet"><input type="checkbox" onchange="toggleRejet('${f.id}')" ${f.isRejet ? 'checked' : ''} ${isLocked||isDefac ? 'disabled' : ''} class="w-3 h-3 text-red-600"><span class="text-[9px] text-red-600 ml-1 font-semibold">Rejet</span></label>${f.isRejet ? `<button onclick="showRejetMotif('${f.id}')" class="text-[10px] cursor-pointer hover:scale-110 transition-transform">⚠️</button>` : '<span class="w-[14px]"></span>'}</div><label class="inline-flex items-center cursor-pointer" title="Défacturer"><input type="checkbox" onchange="toggleDefacture('${f.id}')" ${isDefac ? 'checked' : ''} ${isLocked ? 'disabled' : ''} class="w-3 h-3 text-rose-500"> <span class="text-[9px] text-rose-500 ml-1 font-semibold">Défact.</span></label></div></td>
+                        <td class="p-2 ${txtClass} font-mono text-center"><button onclick="showFseDetailsModal('${f.numFSE}')" class="hover:underline hover:text-blue-600 outline-none cursor-pointer focus:ring-2 focus:ring-blue-300 rounded">${f.numFSE || '-'}</button>${f.fseRemplacement ? `<div class="text-[9px] text-red-400 italic mt-0.5">Remp: ${f.fseRemplacement}</div>` : ''}</td>
+                        <td class="p-2 font-semibold truncate max-w-[120px] ${txtClass}">${f.patient}</td><td class="p-2">${mutAffichage}</td>
+                        <td class="p-2 text-right font-mono ${roAmountClass}">${f.partRO.toFixed(2)}€</td>
+                        <td class="p-2 text-center"><button onclick="toggleCheck('${f.id}', 'RO')" class="px-1.5 py-0.5 rounded text-[10px] font-bold transition shadow-xs ${roBtnClass} ${isLocked||isDefac ? 'cursor-not-allowed opacity-60' : 'hover:opacity-80'}" ${isLocked||isDefac ? 'disabled' : ''}>${f.checkRO ? '✓' : 'Att.'}</button></td>
+                        <td class="p-2 text-center"><input type="date" value="${vRO}" onchange="updateVirement('${f.id}', 'RO', this.value)" class="border border-gray-200 rounded p-0.5 text-[9px] w-[85px] text-center ${vRO ? 'bg-emerald-100/50 border-emerald-300' : 'bg-white'} ${isLocked||isDefac ? 'cursor-not-allowed bg-gray-100 opacity-60' : ''}" ${isLocked||isDefac ? 'disabled' : ''}></td>
+                        <td class="p-2 text-right font-mono ${rcAmountClass}">${f.partRC.toFixed(2)}€</td>
+                        <td class="p-2 text-center"><button onclick="toggleCheck('${f.id}', 'RC')" class="px-1.5 py-0.5 rounded text-[10px] font-bold transition shadow-xs ${rcBtnClass} ${isLocked||isDefac ? 'cursor-not-allowed opacity-60' : 'hover:opacity-80'}" ${isLocked||isDefac ? 'disabled' : ''}>${f.checkRC ? '✓' : 'Att.'}</button></td>
+                        <td class="p-2 text-center"><input type="date" value="${vRC}" onchange="updateVirement('${f.id}', 'RC', this.value)" class="border border-gray-200 rounded p-0.5 text-[9px] w-[85px] text-center ${vRC ? 'bg-indigo-100/50 border-indigo-300' : 'bg-white'} ${isLocked||isDefac ? 'cursor-not-allowed bg-gray-100 opacity-60' : ''}" ${isLocked||isDefac ? 'disabled' : ''}></td>
+                        <td class="p-2 text-right font-bold font-mono text-gray-600">${tFSE.toFixed(2)}€</td><td class="p-2 text-right font-bold font-mono ${dFSE > 0 ? 'text-rose-500' : 'text-emerald-600'}">${dFSE.toFixed(2)}€</td>
+                        <td class="p-2 text-center"><div class="flex flex-wrap justify-center items-center gap-1.5">${actionDreBtn}<button onclick="toggleLock('${f.id}')" class="text-gray-400 hover:text-gray-700 text-xs">${isLocked ? '🔒' : '🔓'}</button>${!isLocked && !isDefac ? `<button onclick="editFSE('${f.id}')" class="text-blue-500 hover:text-blue-700 text-xs">✎</button><button onclick="deleteFSE('${f.id}')" class="text-rose-500 hover:text-rose-700 text-xs">🗑</button>` : ''}</div></td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            });
+
+            const formatEur = (v) => v.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' });
+            document.getElementById('kpiTotalSoins').innerText = formatEur(gSoins); document.getElementById('kpiSoinsRO').innerText = formatEur(gSoinsRO); document.getElementById('kpiSoinsRC').innerText = formatEur(gSoinsRC);
+            document.getElementById('kpiTotalPercu').innerText = formatEur(gPercu); document.getElementById('kpiPercuRO').innerText = formatEur(gPercuRO); document.getElementById('kpiPercuRC').innerText = formatEur(gPercuRC);
+            document.getElementById('kpiTotalDu').innerText = formatEur(gDu); document.getElementById('kpiDuRO').innerText = formatEur(gDuRO); document.getElementById('kpiDuRC').innerText = formatEur(gDuRC);
+            document.getElementById('kpiTaux').innerText = gSoins > 0 ? `${Math.round((gPercu / gSoins) * 100)} %` : `0 %`;
+        }
+
+        // ==========================================
+        // 5. GESTION DES RETOURS NOEMIE (SUPABASE)
+        // ==========================================
+        function openNoemieModal() { resetNoemieForm(); document.getElementById('noemieModal').classList.remove('hidden'); setTimeout(() => document.getElementById('n_date').focus(), 100); }
+        function closeNoemieModal() { document.getElementById('noemieModal').classList.add('hidden'); }
+        function updateNbNoemieFseRows() { let nb = parseInt(document.getElementById('nbNoemieFseToAdd').value) || 1; document.getElementById('noemieFacturesList').innerHTML = ''; for(let i=0; i<nb; i++) addNoemieFactureRow(); }
+
+        function addNoemieFactureRow(fse = '', montant = '') {
+            const list = document.getElementById('noemieFacturesList');
+            const div = document.createElement('div'); div.className = "facture-row flex flex-col gap-0.5 mb-1 bg-white p-1.5 rounded border border-gray-100 shadow-sm"; 
+            
+            const inputsDiv = document.createElement('div'); inputsDiv.className = "flex items-center gap-2";
+            inputsDiv.innerHTML = `
+                <div class="w-1/2"><input type="text" placeholder="N° FSE" value="${fse}" class="fse-input w-full border border-gray-300 rounded p-1 text-xs focus:ring-emerald-500 uppercase font-mono shadow-inner" oninput="updateNoemieRowInfo(this)"></div>
+                <div class="w-1/2 flex items-center gap-1.5"><input type="text" inputmode="decimal" placeholder="Montant" value="${montant}" class="montant-input w-full border border-gray-300 rounded p-1 text-xs focus:ring-emerald-500 font-mono shadow-inner" oninput="updateNoemieRowInfo(this)"><button type="button" onclick="this.closest('.facture-row').remove();" class="text-rose-500 hover:text-rose-700 font-bold px-1 text-lg outline-none" tabindex="-1">×</button></div>
+            `;
+            const infoDiv = document.createElement('div'); infoDiv.className = "fse-info-display text-[9px] min-h-[14px] px-1 flex items-center gap-2 mt-0.5";
+            div.appendChild(inputsDiv); div.appendChild(infoDiv); list.appendChild(div);
+            if(fse) updateNoemieRowInfo(div.querySelector('.fse-input'));
+        }
+
+        function updateNoemieRowInfo(element) {
+            if(!element) return; const row = element.closest('.facture-row'); if(!row) return;
+            const fseVal = row.querySelector('.fse-input').value.trim().toUpperCase(), mtVal = parseFloat(row.querySelector('.montant-input').value.replace(',','.')) || 0;
+            const infoDiv = row.querySelector('.fse-info-display');
+            if(!fseVal) { infoDiv.innerHTML = ''; return; }
+            
+            const fseItem = fseList.find(f => (f.numFSE||'').toUpperCase() === fseVal && !f.isDefacture);
+            if(!fseItem) { infoDiv.innerHTML = '<span class="text-rose-500 font-bold bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200">FSE Introuvable</span>'; return; }
+            
+            const isRoMatch = mtVal > 0 && Math.abs(mtVal - fseItem.partRO) <= 0.01, isRcMatch = mtVal > 0 && Math.abs(mtVal - fseItem.partRC) <= 0.01;
+            let roClass = 'bg-gray-100 text-gray-500 border-gray-200', rcClass = 'bg-gray-100 text-gray-500 border-gray-200';
+            
+            if (isRoMatch) roClass = 'bg-emerald-100 text-emerald-800 border-emerald-400 font-bold shadow-sm';
+            else if (isRcMatch) rcClass = 'bg-indigo-100 text-indigo-800 border-indigo-400 font-bold shadow-sm';
+            else if (mtVal > 0 && Math.abs(mtVal - (fseItem.partRO + fseItem.partRC)) <= 0.01) { roClass = 'bg-blue-100 text-blue-800 border-blue-400 font-bold shadow-sm'; rcClass = 'bg-blue-100 text-blue-800 border-blue-400 font-bold shadow-sm'; }
+
+            if (fseItem.checkRO) roClass = 'bg-orange-100 text-orange-800 border-orange-400 font-bold shadow-inner';
+            if (fseItem.checkRC) rcClass = 'bg-orange-100 text-orange-800 border-orange-400 font-bold shadow-inner';
+
+            infoDiv.innerHTML = `<span class="font-bold text-gray-800 truncate max-w-[130px] mr-1 uppercase">${fseItem.patient}</span><span class="px-1.5 py-0.5 rounded border transition-colors ${roClass}">RO : ${fseItem.partRO.toFixed(2)}€</span><span class="px-1.5 py-0.5 rounded border transition-colors ${rcClass}">RC : ${fseItem.partRC.toFixed(2)}€</span>`;
+        }
+
+        function resetNoemieForm() {
+            currentNoemieEditId = null; document.getElementById('btnSubmitNoemieAction').innerText = "Sauvegarder et Pointer";
+            const btnNew = document.getElementById('btnSubmitNoemieNew'); if (btnNew) btnNew.classList.remove('hidden');
+            document.getElementById('cat_noemie').checked = true; document.getElementById('cat_justif').checked = false; document.getElementById('cat_releve').checked = false;
+            ['n_caisse','n_encaisse','n_releve','n_info'].forEach(id => document.getElementById(id).value = '');
+            document.getElementById('nbNoemieFseToAdd').value = 1; updateActivePraticienLabels(); document.getElementById('noemieFacturesList').innerHTML = ''; addNoemieFactureRow(); 
+        }
+
+        async function saveNoemieManual(e) {
+            if (e) e.preventDefault();
+            const isKeepOpen = (e && e.submitter) ? (e.submitter.id === 'btnSubmitNoemieNew') : false;
+            const gPrat = document.getElementById('globalPraticienFilter').value;
+            let targetPraticien = gPrat !== 'ALL' ? gPrat : (praticiensList.length > 0 ? praticiensList[0].name : '');
+
+            let facturesData = [], totalGeneral = 0, fsesToUpdate = [];
+            
+            document.querySelectorAll('#noemieFacturesList .facture-row').forEach(row => {
+                let fVal = row.querySelector('.fse-input').value.trim().toUpperCase();
+                let mVal = parseFloat((row.querySelector('.montant-input').value || '0').replace(',', '.')) || 0;
+                
+                if (fVal || mVal > 0) {
+                    facturesData.push({ fse: fVal || '-', montant: mVal }); totalGeneral += mVal;
+                    if (fVal) {
+                        const linkedFse = fseList.find(f => f.numFSE === fVal && !f.isDefacture);
+                        if (linkedFse) {
+                            const dEncaisse = document.getElementById('n_encaisse').value;
+                            if (mVal > 0 && Math.abs(mVal - linkedFse.partRO) <= 0.01) { linkedFse.checkRO = true; if(dEncaisse) linkedFse.dateVirementRO = dEncaisse; }
+                            else if (mVal > 0 && Math.abs(mVal - linkedFse.partRC) <= 0.01) { linkedFse.checkRC = true; if(dEncaisse) linkedFse.dateVirementRC = dEncaisse; }
+                            else if (mVal > 0 && Math.abs(mVal - (linkedFse.partRO + linkedFse.partRC)) <= 0.01) { linkedFse.checkRO = true; linkedFse.checkRC = true; if(dEncaisse) { linkedFse.dateVirementRO = dEncaisse; linkedFse.dateVirementRC = dEncaisse; } }
+                            linkedFse.isLocked = (linkedFse.checkRO && linkedFse.checkRC);
+                            fsesToUpdate.push(linkedFse);
+                        }
+                    }
+                }
+            });
+
+            const newNoemieData = {
+                catNoemie: document.getElementById('cat_noemie').checked, catJustif: document.getElementById('cat_justif').checked, catReleve: document.getElementById('cat_releve').checked,
+                praticien: targetPraticien, dateNoemie: document.getElementById('n_date').value, caisse: document.getElementById('n_caisse').value,
+                encaisseLe: document.getElementById('n_encaisse').value, releve: document.getElementById('n_releve').value, info: document.getElementById('n_info').value,
+                factures: facturesData, totalMontant: totalGeneral, dateImport: new Date().toISOString()
+            };
+
+            let targetNoemie;
+            if (currentNoemieEditId) {
+                const index = noemieList.findIndex(n => n.id === currentNoemieEditId);
+                noemieList[index] = { ...noemieList[index], ...newNoemieData }; targetNoemie = noemieList[index];
+            } else { targetNoemie = { ...newNoemieData, id: Date.now().toString() }; noemieList.push(targetNoemie); }
+
+            document.body.style.cursor = 'wait';
+            await Promise.all([
+                supabaseClient.from('noemie').upsert(mapNoemieToDb(targetNoemie)),
+                fsesToUpdate.length > 0 ? supabaseClient.from('fse').upsert(fsesToUpdate.map(mapFseToDb)) : Promise.resolve()
+            ]);
+            document.body.style.cursor = 'default';
+
+            render(); renderNoemieTable(); updateDatalists(); updateYearsDatalist();
+
+            if (isKeepOpen) {
+                ['n_date','n_caisse','n_encaisse','n_releve','n_info'].forEach(id => document.getElementById(id).value = '');
+                document.getElementById('noemieFacturesList').innerHTML = ''; addNoemieFactureRow(); setTimeout(() => document.getElementById('n_date').focus(), 100);
+            } else { document.getElementById('noemieModal').classList.add('hidden'); currentNoemieEditId = null; }
+        }
+
+        function editNoemie(id) {
+            const item = noemieList.find(n => n.id === id); if (!item) return;
+            currentNoemieEditId = id;
+            document.getElementById('cat_noemie').checked = item.catNoemie || false; document.getElementById('cat_justif').checked = item.catJustif || false; document.getElementById('cat_releve').checked = item.catReleve || false;
+            document.getElementById('n_date').value = item.dateNoemie || ''; document.getElementById('n_caisse').value = item.caisse || ''; document.getElementById('n_encaisse').value = item.encaisseLe || '';
+            document.getElementById('n_releve').value = item.releve || ''; document.getElementById('n_info').value = item.info || '';
+            document.getElementById('noemieFacturesList').innerHTML = ''; document.getElementById('nbNoemieFseToAdd').value = item.factures ? item.factures.length : 1;
+            if (item.factures && item.factures.length > 0) item.factures.forEach(f => addNoemieFactureRow(f.fse, f.montant)); else addNoemieFactureRow();
+            
+            document.getElementById('btnSubmitNoemieAction').innerText = "Mettre à jour le retour"; 
+            const btnNew = document.getElementById('btnSubmitNoemieNew'); if (btnNew) btnNew.classList.add('hidden');
+            document.getElementById('noemieModal').classList.remove('hidden');
+        }
+
+        async function updateNoemieInline(id, field, val) {
+            const item = noemieList.find(n => n.id === id);
+            if(item) { item[field] = val; await dbUpdateNoemie(item); renderNoemieTable(); }
+        }
+
+        async function deleteNoemie(id) {
+            if (!confirm("Voulez-vous vraiment supprimer cet élément de la liste ?")) return;
+            const itemToDelete = noemieList.find(n => n.id == id); if (!itemToDelete) return;
+
+            let fsesToUpdate = [];
+            if (itemToDelete.factures) {
+                itemToDelete.factures.forEach(fact => {
+                    const fseLinked = fseList.find(f => f.numFSE === fact.fse && !f.isDefacture);
+                    if (fseLinked) {
+                        const existsElsewhere = noemieList.some(n => n.id != id && n.factures && n.factures.some(otherFact => otherFact.fse === fact.fse));
+                        if (!existsElsewhere) { fseLinked.checkRO = false; fseLinked.checkRC = false; fseLinked.dateVirementRO = ""; fseLinked.dateVirementRC = ""; fsesToUpdate.push(fseLinked); } 
+                        else if (itemToDelete.catReleve) { fseLinked.dateVirementRO = ""; fseLinked.dateVirementRC = ""; fsesToUpdate.push(fseLinked); }
+                    }
+                });
+            }
+
+            noemieList = noemieList.filter(n => n.id != id);
+            
+            document.body.style.cursor = 'wait';
+            await Promise.all([
+                supabaseClient.from('noemie').delete().eq('id', id),
+                fsesToUpdate.length > 0 ? supabaseClient.from('fse').upsert(fsesToUpdate.map(mapFseToDb)) : Promise.resolve()
+            ]);
+            document.body.style.cursor = 'default';
+
+            render(); renderNoemieTable();
+        }
+
+        function sortNoemie(col) { if (noemieSortCol === col) noemieSortAsc = !noemieSortAsc; else { noemieSortCol = col; noemieSortAsc = true; } renderNoemieTable(); }
+        function clearNoemieFilters() { ['sNoemieDate', 'sNoemiePraticien', 'sNoemieCaisse', 'sNoemieFSE', 'sNoemieMontant', 'sNoemieEncaisse', 'sNoemieReleve', 'sNoemieInfo'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; }); renderNoemieTable(); }
+
+        function renderNoemieTable() {
+            const tbody = document.getElementById('noemieTableBody'); tbody.innerHTML = '';
+            const gPrat = document.getElementById('globalPraticienFilter').value, filterYear = document.getElementById('yearFilter').value;
+            const getSearchVal = (id) => { const el = document.getElementById(id); return el ? el.value.toLowerCase() : ''; };
+            
+            const sDate = getSearchVal('sNoemieDate'), sPraticien = getSearchVal('sNoemiePraticien'), sCaisse = getSearchVal('sNoemieCaisse'), sFSE = getSearchVal('sNoemieFSE'), sMontant = getSearchVal('sNoemieMontant'), sEncaisse = getSearchVal('sNoemieEncaisse'), sReleve = getSearchVal('sNoemieReleve'), sInfo = getSearchVal('sNoemieInfo');
+
+            let filteredNoemie = noemieList.filter(item => {
+                if (gPrat !== 'ALL' && item.praticien !== gPrat) return false;
+                if (filterYear !== 'ALL' && item.dateNoemie && item.dateNoemie.substring(0,4) !== filterYear) return false;
+                const dNoemie = item.dateNoemie ? new Date(item.dateNoemie).toLocaleDateString('fr-FR') : '-', dEncaisse = item.encaisseLe ? new Date(item.encaisseLe).toLocaleDateString('fr-FR') : '-';
+                const totalRet = item.totalMontant || (item.factures ? item.factures.reduce((acc, f) => acc + (parseFloat(f.montant) || 0), 0) : 0);
+                const allFse = item.factures ? item.factures.map(f => f.fse).join(' ').toLowerCase() : '';
+                return dNoemie.toLowerCase().includes(sDate) && (item.praticien || '-').toLowerCase().includes(sPraticien) && (item.caisse || '').toLowerCase().includes(sCaisse) && allFse.includes(sFSE) && totalRet.toFixed(2).includes(sMontant) && dEncaisse.toLowerCase().includes(sEncaisse) && (item.releve || '').toLowerCase().includes(sReleve) && (item.info || '').toLowerCase().includes(sInfo);
+            });
+
+            filteredNoemie.sort((a, b) => {
+                let valA, valB;
+                if (noemieSortCol === 'date') { valA = a.dateNoemie ? new Date(a.dateNoemie).getTime() : 0; valB = b.dateNoemie ? new Date(b.dateNoemie).getTime() : 0; } 
+                else if (noemieSortCol === 'caisse') { valA = (a.caisse || '').toLowerCase(); valB = (b.caisse || '').toLowerCase(); } 
+                else if (noemieSortCol === 'nbFSE') { valA = a.factures ? a.factures.length : 0; valB = b.factures ? b.factures.length : 0; }
+                if (valA < valB) return noemieSortAsc ? -1 : 1;
+                if (valA > valB) return noemieSortAsc ? 1 : -1;
+                return b.id - a.id; 
+            });
+
+            ['date', 'caisse', 'nbFSE'].forEach(col => {
+                const el = document.getElementById(`sortIcon_${col}`);
+                if(el) { if(col === noemieSortCol) { el.innerText = noemieSortAsc ? ' ▲' : ' ▼'; el.className = "text-teal-900 ml-1"; } else { el.innerText = ' ↕'; el.className = "text-teal-600/40 ml-1"; } }
+            });
+
+            filteredNoemie.forEach(item => {
+                const trMain = document.createElement('tr');
+                let bgClass = item.catJustif ? "bg-amber-50 hover:bg-amber-100/70 " : "bg-white hover:bg-teal-50/20 ";
+                trMain.className = `border-t-2 border-gray-200 transition-colors ${bgClass}`;
+                const tColorNorm = item.catReleve ? "text-red-600 font-semibold" : "text-gray-700 font-bold", tColorItal = item.catReleve ? "text-red-400 italic" : "text-gray-500 italic", tColorEm = item.catReleve ? "text-red-600 font-bold" : "text-emerald-700 font-bold";
+                let badgeHtml = item.catReleve ? `<span class="inline-block px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-red-100 text-red-700 border border-red-200 shadow-sm leading-none">Relevé</span>` : (item.catJustif ? `<span class="inline-block px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-amber-100 text-amber-700 border border-amber-200 shadow-sm leading-none">Justif.</span>` : `<span class="inline-block px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-teal-100 text-teal-700 border border-teal-200 shadow-sm leading-none">NOEMIE</span>`);
+                const nbActes = item.factures ? item.factures.length : 0;
+                let totalRetour = item.totalMontant || (item.factures ? item.factures.reduce((a, f) => a + (parseFloat(f.montant) || 0), 0) : 0);
+
+                trMain.innerHTML = `
+                    <td class="p-2"><div class="flex flex-col gap-1 items-start">${badgeHtml}<span class="${tColorNorm}">${item.dateNoemie ? new Date(item.dateNoemie).toLocaleDateString('fr-FR') : '-'}</span></div></td>
+                    <td class="p-2 truncate max-w-[90px]">${getPraticienBadge(item.praticien)}</td><td class="p-2 ${tColorNorm}">${item.caisse || '-'}</td>
+                    <td class="p-2 text-center"><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-gray-100 text-gray-600 border border-gray-200">${nbActes} FSE</span></td>
+                    <td class="p-2 text-right text-sm ${tColorEm}">${totalRetour ? totalRetour.toFixed(2) : '0.00'} €</td>
+                    <td class="p-2 text-center bg-indigo-50/30"><input type="date" value="${item.encaisseLe || ''}" onchange="updateNoemieInline('${item.id}', 'encaisseLe', this.value)" class="border border-transparent hover:border-gray-300 rounded p-0.5 text-[9px] w-[95px] text-center bg-transparent focus:bg-white focus:border-indigo-400 transition-colors cursor-pointer"></td>
+                    <td class="p-2"><input type="text" value="${item.releve || ''}" onchange="updateNoemieInline('${item.id}', 'releve', this.value)" class="border border-transparent hover:border-gray-300 rounded p-1 text-[10px] w-full bg-transparent focus:bg-white focus:border-teal-400 transition-colors"></td>
+                    <td class="p-2 truncate max-w-[150px] ${tColorItal}">${item.info || '-'}</td>
+                    <td class="p-2 text-center"><div class="flex justify-center items-center gap-2"><button onclick="editNoemie('${item.id}')" title="Modifier" class="text-blue-500 hover:text-blue-700 text-xs bg-blue-50 p-1 rounded">✎</button><button onclick="deleteNoemie('${item.id}')" title="Supprimer" class="text-rose-500 hover:text-rose-700 text-xs bg-rose-50 p-1 rounded">🗑</button></div></td>
+                `;
+                tbody.appendChild(trMain);
+
+                if (item.factures && item.factures.length > 0) {
+                    item.factures.forEach(f => {
+                        const trSub = document.createElement('tr');
+                        const highlightClass = (sFSE && f.fse && f.fse.toLowerCase().includes(sFSE)) ? 'bg-yellow-200 shadow-inner' : (item.catReleve ? "bg-red-50/50" : (item.catJustif ? "bg-amber-50" : "bg-gray-50"));
+                        const linkedFse = fseList.find(i => i.numFSE === f.fse && !i.isDefacture);
+
+                        trSub.className = `border-b border-gray-100 text-[11px] ${highlightClass} transition-colors`;
+                        trSub.innerHTML = `
+                            <td colspan="3" class="text-right pr-4 py-1.5 text-gray-500"><span class="text-gray-400 mr-2">↳</span> <span class="font-bold text-gray-700 uppercase">${linkedFse ? linkedFse.patient : 'Patient inconnu'}</span> - FSE N°</td>
+                            <td class="text-center py-1.5 border-r border-l border-gray-200"><button type="button" onclick="showFseDetailsModal('${f.fse}')" class="font-bold font-mono text-gray-800 hover:underline hover:text-blue-600 transition outline-none rounded">${f.fse}</button></td>
+                            <td class="text-right py-1.5 pr-2 border-r border-gray-200"><span class="font-bold text-emerald-600">${parseFloat(f.montant).toFixed(2)}</span><span class="text-[9px] text-gray-500 font-normal"> / ${linkedFse ? (linkedFse.partRO + linkedFse.partRC).toFixed(2) : '??'}</span></td>
+                            <td colspan="4" class="py-1.5"></td>
+                        `;
+                        tbody.appendChild(trSub);
+                    });
+                }
+            });
+        }
+
+        // ==========================================
+        // 6.0 PARAMÈTRES DES PRATICIENS (SUPABASE)
+        // ==========================================
+        function openSettingsModal() {
+            const container = document.getElementById('settingsPraticiensContainer'); container.innerHTML = '';
+            praticiensList.forEach(p => addSettingsPraticienRow(p.id, p.name, p.color));
+            if(praticiensList.length === 0) addSettingsPraticienRow();
+            document.getElementById('settingsModal').classList.remove('hidden');
+        }
+        function closeSettingsModal() { document.getElementById('settingsModal').classList.add('hidden'); }
+        
+        function addSettingsPraticienRow(id = '', name = '', color = 'vert') {
+            const div = document.createElement('div'); div.className = "flex gap-2 items-center praticien-setting-row";
+            if(id) div.dataset.id = id; // On cache l'ID dans le HTML
+            div.innerHTML = `<input type="text" class="flex-1 border border-gray-300 rounded p-1.5 text-sm p-name" value="${name}" placeholder="Nom du praticien"><select class="border border-gray-300 rounded p-1.5 text-sm p-color bg-gray-50 font-medium"><option value="vert" ${color==='vert'?'selected':''}>🟢 Vert</option><option value="bleu" ${color==='bleu'?'selected':''}>🔵 Bleu</option><option value="rose" ${color==='rose'?'selected':''}>🌸 Rose</option><option value="violet" ${color==='violet'?'selected':''}>🟣 Violet</option><option value="orange" ${color==='orange'?'selected':''}>🟠 Orange</option></select><button type="button" onclick="this.parentElement.remove()" class="text-rose-500 hover:text-rose-700 font-bold px-2 py-1 bg-rose-50 rounded transition">✕</button>`;
+            document.getElementById('settingsPraticiensContainer').appendChild(div);
+        }
+
+        async function saveSettings() {
+            document.body.style.cursor = 'wait';
+            const pRows = document.querySelectorAll('.praticien-setting-row'); 
+            let newPraticiensList = [];
+            
+            pRows.forEach(row => { 
+                const n = row.querySelector('.p-name').value.trim(); 
+                const c = row.querySelector('.p-color').value; 
+                let pid = row.dataset.id || ('prat_' + Date.now() + Math.random().toString(36).substr(2, 5));
+                if(n) newPraticiensList.push({ id: pid, cabinet_id: cabinetActifId, name: n, color: c }); 
+            });
+
+            if(newPraticiensList.length === 0) newPraticiensList = [{ id: '1', cabinet_id: cabinetActifId, name: 'Praticien 1', color: 'vert' }];
+
+            const currentIds = newPraticiensList.map(p => p.id);
+            const idsToDelete = praticiensList.map(p => p.id).filter(id => !currentIds.includes(id));
+            
+            if(idsToDelete.length > 0) await supabaseClient.from('praticiens_suivi').delete().in('id', idsToDelete);
+            if(newPraticiensList.length > 0) await supabaseClient.from('praticiens_suivi').upsert(newPraticiensList);
+
+            praticiensList = newPraticiensList;
+            populateSelects(); closeSettingsModal(); render();
+            document.body.style.cursor = 'default';
+        }
+
+        function openRetroModal() {
+            currentRetroEditId = null; document.getElementById('retroModalTitle').innerText = "Saisie Rétrocession"; document.getElementById('retroForm').reset();
+            const curY = document.getElementById('yearFilter').value; document.getElementById('retroAnnee').value = (curY !== 'ALL') ? curY : new Date().getFullYear();
+            const curM = document.getElementById('monthFilter').value; document.getElementById('retroMois').value = (curM !== 'ALL') ? curM : String(new Date().getMonth() + 1).padStart(2, '0');
+            document.getElementById('retroModal').classList.remove('hidden');
+        }
+        function closeRetroModal() { document.getElementById('retroModal').classList.add('hidden'); }
+
+        function saveRetro(e) {
+            e.preventDefault();
+            const gPrat = document.getElementById('globalPraticienFilter').value; let targetPraticien = gPrat !== 'ALL' ? gPrat : praticiensList[0].name;
+            const newRetro = { annee: parseInt(document.getElementById('retroAnnee').value), mois: document.getElementById('retroMois').value, praticien: targetPraticien, taux: parseFloat(document.getElementById('retroTaux').value)||0, kine: parseFloat(document.getElementById('retroKine').value)||0, remplacant: parseFloat(document.getElementById('retroRemplacant').value)||0, paye: parseFloat(document.getElementById('retroPaye').value)||0, datePaiement: document.getElementById('retroDatePaiement').value || "", regKine: null, regRemplacant: null };
+            
+            if (currentRetroEditId) { 
+                const idx = retroList.findIndex(r => r.id === currentRetroEditId);
+                if (idx !== -1) { newRetro.praticien = retroList[idx].praticien; newRetro.regKine = retroList[idx].regKine; newRetro.regRemplacant = retroList[idx].regRemplacant; retroList[idx] = { ...retroList[idx], ...newRetro }; } 
+            } else { 
+                newRetro.id = Date.now().toString(); retroList.push(newRetro);
+            }
+            
+            // LA MODIFICATION EST ICI :
+            localStorage.setItem('retro_data_' + cabinetActifId, JSON.stringify(retroList)); 
+            
+            updateYearsDatalist(); closeRetroModal(); renderRetros();
+        }
+
+        function editRetro(id) {
+            const item = retroList.find(r => r.id === id); if(!item) return;
+            currentRetroEditId = id; document.getElementById('retroModalTitle').innerText = "Modifier Rétrocession";
+            document.getElementById('retroAnnee').value = item.annee; document.getElementById('retroMois').value = item.mois; document.getElementById('retroTaux').value = item.taux || '';
+            document.getElementById('retroKine').value = item.kine; document.getElementById('retroRemplacant').value = item.remplacant; document.getElementById('retroPaye').value = item.paye || ''; document.getElementById('retroDatePaiement').value = item.datePaiement || '';
+            document.getElementById('retroModal').classList.remove('hidden');
+        }
+
+        function deleteRetro(id) { 
+            if(confirm("Supprimer cette rétrocession ?")) { 
+                retroList = retroList.filter(r => r.id !== id);
+                // LA MODIFICATION EST ICI AUSSI :
+                localStorage.setItem('retro_data_' + cabinetActifId, JSON.stringify(retroList)); 
+                updateYearsDatalist(); renderRetros(); 
+            } 
+        }
+
+        function renderRetros() {
+            const tbody = document.getElementById('retrosTableBody'); tbody.innerHTML = '';
+            const gPrat = document.getElementById('globalPraticienFilter').value, filterYear = document.getElementById('yearFilter').value;
+            let filtered = retroList.filter(r => { if (gPrat !== 'ALL' && r.praticien !== gPrat) return false; if (filterYear !== 'ALL' && r.annee.toString() !== filterYear) return false; return true; });
+            filtered.sort((a,b) => { if(b.annee !== a.annee) return b.annee - a.annee; return parseInt(b.mois) - parseInt(a.mois); });
+            document.getElementById('retroEmptyState').classList.toggle('hidden', filtered.length > 0);
+
+            filtered.forEach(r => {
+                const isRegul = (r.regKine !== null || r.regRemplacant !== null), realKine = isRegul ? r.regKine : r.kine, realRempl = isRegul ? r.regRemplacant : r.remplacant;
+                const totalFSE = realKine + realRempl, solde = totalFSE - r.paye, moisNom = nomsMois[parseInt(r.mois)-1] || r.mois, dPaie = r.datePaiement ? new Date(r.datePaiement).toLocaleDateString('fr-FR') : '-';
+                
+                const tr = document.createElement('tr'); tr.className = `border-b border-gray-100 bg-white hover:bg-purple-50/30 transition`;
+                let kineHtml = `${r.kine.toFixed(2)}€`, remplHtml = `${r.remplacant.toFixed(2)}€`, totalHtml = `${(r.kine+r.remplacant).toFixed(2)}€`;
+                if (isRegul) { kineHtml = `<s class="text-gray-400 text-[10px]">${r.kine.toFixed(2)}</s><br><span class="text-orange-700 font-bold">${realKine.toFixed(2)}€</span>`; remplHtml = `<s class="text-gray-400 text-[10px]">${r.remplacant.toFixed(2)}</s><br><span class="text-orange-700 font-bold">${realRempl.toFixed(2)}€</span>`; totalHtml = `<s class="text-gray-400 text-[10px]">${(r.kine+r.remplacant).toFixed(2)}</s><br><span class="text-orange-700 font-black">${totalFSE.toFixed(2)}€</span>`; }
+
+                tr.innerHTML = `
+                    <td class="p-2 font-bold text-gray-700">${moisNom} ${r.annee}</td><td class="p-2">${getPraticienBadge(r.praticien)}</td><td class="p-2 text-center text-gray-600">${r.taux ? r.taux+'%' : '-'}</td>
+                    <td class="p-2 text-right">${kineHtml}</td><td class="p-2 text-right">${remplHtml}</td><td class="p-2 text-right bg-purple-50/50">${totalHtml}</td>
+                    <td class="p-2 text-right font-bold text-emerald-600">${r.paye.toFixed(2)}€</td><td class="p-2 text-center text-gray-500">${dPaie}</td>
+                    <td class="p-2 text-right font-black ${solde !== 0 ? 'text-rose-600' : 'text-emerald-500'}">${solde.toFixed(2)}€</td>
+                    <td class="p-2 text-center"><div class="flex justify-center items-center gap-1"><button onclick="openRegulModal('${r.id}')" title="Régulariser (Fin d'année)" class="text-orange-500 hover:text-white hover:bg-orange-500 border border-orange-500 text-[10px] font-bold px-1.5 py-0.5 rounded transition">Régul.</button><button onclick="editRetro('${r.id}')" class="text-blue-500 hover:text-blue-700 text-xs px-1">✎</button><button onclick="deleteRetro('${r.id}')" class="text-rose-500 hover:text-rose-700 text-xs px-1">🗑</button></div></td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // ==========================================
+        // 7. BILAN COMPTABLE ET IMPAYES
+        // ==========================================
+        function openRecapModal() { document.getElementById('recapModal').classList.remove('hidden'); renderRecapAnnuel(); }
+        function closeRecapModal() { document.getElementById('recapModal').classList.add('hidden'); }
+
+        function showImpayesDetails(monthKey) {
+            const gPrat = document.getElementById('globalPraticienFilter').value, filterYear = document.getElementById('yearFilter').value;
+            let filtered = fseList.filter(f => {
+                if (f.isDefacture) return false;
+                if (gPrat !== 'ALL' && f.praticien !== gPrat) return false;
+                
+                const fDate = new Date(f.date), itemYear = fDate.getFullYear().toString();
+                if (filterYear !== 'ALL' && itemYear !== filterYear) return false;
+                if (monthKey !== 'ALL') { const itemMonth = String(fDate.getMonth() + 1).padStart(2, '0'); if (itemMonth !== monthKey) return false; }
+                
+                const roDu = f.checkRO ? 0 : f.partRO, rcDu = f.checkRC ? 0 : f.partRC;
+                return (roDu + rcDu) > 0;
+            });
+
+            filtered.sort((a, b) => new Date(b.date) - new Date(a.date));
+            const tbody = document.getElementById('impayesBilanBody'); tbody.innerHTML = '';
+            let totalDuGlobal = 0;
+
+            filtered.forEach(f => {
+                const roDu = f.checkRO ? 0 : f.partRO, rcDu = f.checkRC ? 0 : f.partRC, du = roDu + rcDu; totalDuGlobal += du;
+                const tr = document.createElement('tr'); tr.className = "hover:bg-rose-50/50 transition-colors";
+                tr.innerHTML = `
+                    <td class="p-2 py-2"><div class="font-bold text-gray-700">${new Date(f.date).toLocaleDateString('fr-FR')}</div><div class="text-[10px] text-indigo-500 font-mono">Lot ${f.lot} • N°${f.numFSE}</div></td>
+                    <td class="p-2 py-2 font-bold text-gray-800">${f.patient}</td>
+                    <td class="p-2 py-2"><div class="text-gray-700 font-medium">${f.caisse || '-'}</div><div class="text-[10px] text-gray-500 truncate max-w-[120px]">${f.mutuelle || '-'}</div></td>
+                    <td class="p-2 py-2 text-right font-mono ${roDu > 0 ? 'text-rose-600 font-bold' : 'text-gray-400'}">${roDu.toFixed(2)} €</td>
+                    <td class="p-2 py-2 text-right font-mono ${rcDu > 0 ? 'text-rose-600 font-bold' : 'text-gray-400'}">${rcDu.toFixed(2)} €</td>
+                    <td class="p-2 py-2 text-right font-mono font-black text-rose-700 bg-rose-50/30">${du.toFixed(2)} €</td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            if (filtered.length === 0) tbody.innerHTML = `<tr><td colspan="6" class="p-6 text-center text-gray-500 italic">Aucun impayé trouvé.</td></tr>`;
+            const monthName = monthKey !== 'ALL' ? nomsMois[parseInt(monthKey) - 1] : '';
+            document.getElementById('impayesBilanTitle').innerText = monthKey === 'ALL' ? 'Tous les impayés de l\'année' : `Impayés du mois (${monthName})`;
+            document.getElementById('impayesBilanTotal').innerText = totalDuGlobal.toFixed(2) + ' €';
+            document.getElementById('impayesBilanModal').classList.remove('hidden');
+        }
+
+        function renderRecapAnnuel() {
+            const recapBody = document.getElementById('recapTableBody'), recapTotal = document.getElementById('recapTableTotal');
+            const filterYear = document.getElementById('yearFilter').value, gPrat = document.getElementById('globalPraticienFilter').value;
+            recapBody.innerHTML = '';
+
+            let md = Array.from({length: 12}, () => ({roF:0, roP:0, rcF:0, rcP:0, tF:0, tP:0, r:0}));
+
+            fseList.forEach(f => {
+                if (f.isDefacture) return;
+                if (gPrat !== 'ALL' && f.praticien !== gPrat) return;
+                const d = new Date(f.date);
+                if (filterYear !== 'ALL' && d.getFullYear().toString() !== filterYear) return;
+
+                const mIdx = d.getMonth(), roP = f.checkRO ? f.partRO : 0, rcP = f.checkRC ? f.partRC : 0;
+                md[mIdx].roF += f.partRO; md[mIdx].roP += roP; md[mIdx].rcF += f.partRC; md[mIdx].rcP += rcP;
+                md[mIdx].tF += (f.partRO + f.partRC); md[mIdx].tP += (roP + rcP); md[mIdx].r += (f.partRO + f.partRC) - (roP + rcP);
+            });
+
+            let aRoF=0, aRoP=0, aRcF=0, aRcP=0, aTF=0, aTP=0, aR=0, cumulTF=0, cumulR=0;
+
+            nomsMois.forEach((nom, i) => {
+                const d = md[i]; aRoF += d.roF; aRoP += d.roP; aRcF += d.rcF; aRcP += d.rcP; aTF += d.tF; aTP += d.tP; aR += d.r; cumulTF += d.tF; cumulR += d.r;
+                let tauxCumul = cumulTF > 0 ? (cumulR / cumulTF) * 100 : 0;
+                const monthNum = String(i + 1).padStart(2, '0');
+
+                const tr = document.createElement('tr'); tr.className = "border-b border-gray-100 hover:bg-gray-50/50 transition-colors";
+                tr.innerHTML = `
+                    <td class="p-2 font-bold text-gray-700">${nom}</td>
+                    <td class="p-2 text-right bg-teal-50/20 text-teal-900">${d.roF.toFixed(2)} €</td><td class="p-2 text-right bg-teal-50/20 text-teal-700">${d.roP.toFixed(2)} €</td>
+                    <td class="p-2 text-right bg-indigo-50/20 text-indigo-900">${d.rcF.toFixed(2)} €</td><td class="p-2 text-right bg-indigo-50/20 text-indigo-700">${d.rcP.toFixed(2)} €</td>
+                    <td class="p-2 text-right font-bold text-gray-800">${d.tF.toFixed(2)} €</td><td class="p-2 text-right font-bold text-emerald-600">${d.tP.toFixed(2)} €</td>
+                    <td class="p-2 text-right font-bold ${d.r > 0 ? 'text-rose-600 cursor-pointer hover:underline hover:text-rose-800 transition-colors' : 'text-emerald-600'}" ${d.r > 0 ? `onclick="showImpayesDetails('${monthNum}')" title="Voir les impayés de ${nom}"` : ''}>${d.r.toFixed(2)} €</td>
+                    <td class="p-2 text-right font-bold text-orange-700 bg-orange-50/30">${tauxCumul.toFixed(2)} %</td>
+                `;
+                recapBody.appendChild(tr);
+            });
+
+            recapTotal.innerHTML = `
+                <td class="p-2 font-sans font-bold">TOTAL</td>
+                <td class="p-2 text-right font-bold">${aRoF.toFixed(2)} €</td><td class="p-2 text-right font-bold text-emerald-700">${aRoP.toFixed(2)} €</td>
+                <td class="p-2 text-right font-bold">${aRcF.toFixed(2)} €</td><td class="p-2 text-right font-bold text-emerald-700">${aRcP.toFixed(2)} €</td>
+                <td class="p-2 text-right font-bold text-gray-900">${aTF.toFixed(2)} €</td><td class="p-2 text-right font-bold text-emerald-700">${aTP.toFixed(2)} €</td>
+                <td class="p-2 text-right font-bold ${aR > 0 ? 'text-rose-600 cursor-pointer hover:underline hover:text-rose-800 transition-colors' : 'text-emerald-700'}" ${aR > 0 ? `onclick="showImpayesDetails('ALL')"` : ''}>${aR.toFixed(2)} €</td>
+                <td class="p-2 text-right font-bold text-orange-800 bg-orange-100/50">${aTF > 0 ? ((aR / aTF) * 100).toFixed(2) : '0.00'} %</td>
+            `;
+            
+            const txtImpayesGlobal = document.getElementById('txtImpayesGlobal');
+            if (txtImpayesGlobal) txtImpayesGlobal.innerText = (aTF > 0 ? ((aR / aTF) * 100).toFixed(2) : '0.00') + ' %';
+            
+            document.getElementById('recapModal').classList.remove('hidden');
+        }
+
+        // ==========================================
+        // DIVERS (Modales details, relances...)
+        // ==========================================
+        function showFseDetailsModal(numFSE) {
+            const item = fseList.find(f => f.numFSE === numFSE && !f.isDefacture); if (!item) return;
+            const totalSoins = item.partRO + item.partRC, roPercu = item.checkRO ? item.partRO : 0, rcPercu = item.checkRC ? item.partRC : 0, du = totalSoins - (roPercu + rcPercu);
+            const badgePrat = getPraticienBadge(item.praticien);
+            let statusTxt = item.isLocked ? '<span class="text-emerald-600 font-bold">🔒 Soldée</span>' : (du === 0 ? '<span class="text-emerald-500 font-bold">Soldée</span>' : '<span class="text-orange-500 font-bold">En Attente</span>');
+            if (item.isRejet) statusTxt = '<span class="text-red-600 font-bold">⚠️ Rejetée</span>';
+            const vRO = item.dateVirementRO ? new Date(item.dateVirementRO).toLocaleDateString('fr-FR') : '-', vRC = item.dateVirementRC ? new Date(item.dateVirementRC).toLocaleDateString('fr-FR') : '-';
+
+            let roBg = "bg-gray-100 border-gray-200", roTxt = "text-gray-800", roTitle = "text-gray-500";
+            if (item.partRO > 0) { if (item.checkRO) { roBg = "bg-emerald-100 border-emerald-300"; roTxt = "text-emerald-900"; roTitle = "text-emerald-700"; } else { roBg = "bg-rose-100 border-rose-300"; roTxt = "text-rose-900"; roTitle = "text-rose-700"; } }
+            let rcBg = "bg-gray-100 border-gray-200", rcTxt = "text-gray-800", rcTitle = "text-gray-500";
+            if (item.partRC > 0) { if (item.checkRC) { rcBg = "bg-emerald-100 border-emerald-300"; rcTxt = "text-emerald-900"; rcTitle = "text-emerald-700"; } else { rcBg = "bg-rose-100 border-rose-300"; rcTxt = "text-rose-900"; rcTitle = "text-rose-700"; } }
+            let totBg = "bg-gray-100 border-gray-200", totTxt = "text-gray-800", totTitle = "text-gray-500";
+            if (totalSoins > 0) { if (du === 0) { totBg = "bg-emerald-100 border-emerald-300"; totTxt = "text-emerald-900"; totTitle = "text-emerald-700"; } else { totBg = "bg-rose-100 border-rose-300"; totTxt = "text-rose-900"; totTitle = "text-rose-700"; } }
+
+            document.getElementById('fseDetailsContent').innerHTML = `
+                <div class="text-center mb-4"><div class="text-2xl font-black text-gray-800">${item.patient}</div><div class="text-sm text-gray-500">Facture N° <strong class="text-indigo-600">${item.numFSE}</strong></div></div>
+                <div class="grid grid-cols-2 gap-4 text-sm bg-gray-50 p-3 rounded-lg border border-gray-200">
+                    <div><span class="text-gray-500 text-xs block">Praticien</span>${badgePrat}</div><div><span class="text-gray-500 text-xs block">Date & Lot</span><strong class="text-gray-800">${new Date(item.date).toLocaleDateString('fr-FR')} - Lot ${item.lot}</strong></div>
+                    <div><span class="text-gray-500 text-xs block">Caisse RO</span><strong class="text-gray-800">${item.caisse || '-'}</strong></div><div><span class="text-gray-500 text-xs block">Mutuelle / DRE</span><strong class="text-gray-800">${item.mutuelle}</strong> <span class="text-[10px] text-indigo-500 font-bold">${item.dre !== '-' ? 'DRE:'+item.dre : ''}</span></div>
+                </div>
+                ${item.isRejet ? `<div class="bg-red-50 border border-red-200 text-red-700 p-2 rounded text-xs mt-2 text-center"><strong>Motif du rejet :</strong> ${item.motifRejet || 'Non précisé'}</div>` : ''}
+                <div class="grid grid-cols-3 gap-2 text-center my-2">
+                    <div class="${roBg} p-2 rounded border flex flex-col justify-center transition-colors"><div class="text-[10px] ${roTitle} uppercase font-bold">Part RO</div><div class="font-mono font-bold ${roTxt}">${item.partRO.toFixed(2)} €</div><div class="text-[9px] ${roTitle} mt-0.5">Vir: ${vRO}</div></div>
+                    <div class="${rcBg} p-2 rounded border flex flex-col justify-center transition-colors"><div class="text-[10px] ${rcTitle} uppercase font-bold">Part RC</div><div class="font-mono font-bold ${rcTxt}">${item.partRC.toFixed(2)} €</div><div class="text-[9px] ${rcTitle} mt-0.5">Vir: ${vRC}</div></div>
+                    <div class="${totBg} p-2 rounded border flex flex-col justify-center transition-colors"><div class="text-[10px] ${totTitle} uppercase font-bold">Total</div><div class="font-mono font-bold ${totTxt}">${totalSoins.toFixed(2)} €</div><div class="text-[9px] opacity-0 mt-0.5">-</div></div>
+                </div>
+                <div class="flex justify-between items-center bg-white p-3 rounded-lg border border-gray-200 shadow-sm mt-2"><div class="text-sm text-gray-600">Reste à recouvrer :</div><div class="text-lg font-black ${du > 0 ? 'text-rose-600' : 'text-emerald-600'}">${du.toFixed(2)} €</div></div>
+                <div class="text-center text-sm mt-1">${statusTxt}</div>
+            `;
+            document.getElementById('fseDetailsModal').classList.remove('hidden');
+        }
+        function closeFseDetailsModal() { document.getElementById('fseDetailsModal').classList.add('hidden'); }
+        
+        function openDetailsImpayes(type, value, displayTitle) { document.getElementById('detailsImpayesModal').classList.remove('hidden'); }
+        function closeDetailsImpayesModal() { document.getElementById('detailsImpayesModal').classList.add('hidden'); }
+        function openRetroBilanModal() { document.getElementById('retroBilanModal').classList.remove('hidden'); }
+        function closeRetroBilanModal() { document.getElementById('retroBilanModal').classList.add('hidden'); }
+        function openRegulModal(id) { document.getElementById('retroRegulModal').classList.remove('hidden'); }
+        function closeRetroRegulModal() { document.getElementById('retroRegulModal').classList.add('hidden'); }
+        function openImpayesModal() { document.getElementById('impayesModal').classList.remove('hidden'); renderImpayesTable(); }
+        function closeImpayesModal() { document.getElementById('impayesModal').classList.add('hidden'); }
+        function renderImpayesTable() {} 
+
+        // ==========================================
+        // IMPORTATION DE SAUVEGARDE V1 VERS SUPABASE
+        // ==========================================
+        function importData(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = async function(e) {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    
+                    // On récupère les données du fichier de sauvegarde
+                    const oldFse = data.fse_data || data.fseList || [];
+                    const oldNoemie = data.noemie_data || data.noemieList || [];
+                    const oldRetro = data.retro_data || data.retroList || [];
+                    const oldPraticiens = data.praticiens_data_v2 || data.praticiensList || [];
+
+                    const confirmMsg = `Sauvegarde détectée !\nVoulez-vous envoyer vers la base de données en ligne :\n- ${oldFse.length} factures\n- ${oldNoemie.length} retours NOEMIE ?`;
+                    if (!confirm(confirmMsg)) {
+                        event.target.value = ''; 
+                        return;
+                    }
+
+                    document.body.style.cursor = 'wait';
+
+                    // 1. Envoi des factures vers Supabase
+                    if (oldFse.length > 0) {
+                        const dbFse = oldFse.map(mapFseToDb);
+                        const { error } = await supabaseClient.from('fse').upsert(dbFse);
+                        if (error) throw error;
+                    }
+                    
+                    // 2. Envoi des retours NOEMIE vers Supabase
+                    if (oldNoemie.length > 0) {
+                        const dbNoemie = oldNoemie.map(mapNoemieToDb);
+                        const { error } = await supabaseClient.from('noemie').upsert(dbNoemie);
+                        if (error) throw error;
+                    }
+
+                    // 3. Restauration des paramètres locaux (Rétrocessions et couleurs Praticiens)
+                    if (oldRetro.length > 0) localStorage.setItem('retro_data', JSON.stringify(oldRetro));
+                    if (oldPraticiens.length > 0) localStorage.setItem('praticiens_data_v2', JSON.stringify(oldPraticiens));
+
+                    alert("🎉 Importation réussie ! Tes données sont maintenant synchronisées dans le cloud.");
+                    window.location.reload();
+
+                } catch (err) {
+                    console.error("Erreur d'import :", err);
+                    alert("Erreur lors de l'importation : " + err.message);
+                } finally {
+                    document.body.style.cursor = 'default';
+                    event.target.value = ''; // On remet le bouton à zéro
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        // ==========================================
+        // SAUVEGARDE ET IMPORTATION (COMPATIBLE SUPABASE)
+        // ==========================================
+
+        // 1. Fonction pour TÉLÉCHARGER une sauvegarde sur l'ordinateur
+        function exportData() {
+            // On rassemble toutes les données actuellement chargées depuis Supabase et le local
+            const backupData = {
+                fse_data: fseList,
+                noemie_data: noemieList,
+                retro_data: retroList,
+                praticiens_data_v2: praticiensList
+            };
+
+            // Création du fichier JSON
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backupData));
+            const dlAnchorElem = document.createElement('a');
+            dlAnchorElem.setAttribute("href", dataStr);
+            dlAnchorElem.setAttribute("download", "sauvegarde_kine_" + new Date().toLocaleDateString('fr-FR').replace(/\//g, '-') + ".json");
+            
+            // Lancement du téléchargement
+            document.body.appendChild(dlAnchorElem);
+            dlAnchorElem.click();
+            dlAnchorElem.remove();
+        }
+
+        // 2. Fonction pour IMPORTER un fichier et l'envoyer vers Supabase
+        function importData(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = async function(e) {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    
+                    const oldFse = data.fse_data || data.fseList || [];
+                    const oldNoemie = data.noemie_data || data.noemieList || [];
+                    const oldRetro = data.retro_data || data.retroList || [];
+                    const oldPraticiens = data.praticiens_data_v2 || data.praticiensList || [];
+
+                    const confirmMsg = `Sauvegarde détectée !\nVoulez-vous envoyer vers la base de données en ligne :\n- ${oldFse.length} factures\n- ${oldNoemie.length} retours NOEMIE ?`;
+                    if (!confirm(confirmMsg)) { event.target.value = ''; return; }
+
+                    document.body.style.cursor = 'wait';
+
+                    // Envoi vers Supabase
+                    if (oldFse.length > 0) {
+                        const dbFse = oldFse.map(mapFseToDb);
+                        const { error } = await supabaseClient.from('fse').upsert(dbFse);
+                        if (error) throw error;
+                    }
+                    if (oldNoemie.length > 0) {
+                        const dbNoemie = oldNoemie.map(mapNoemieToDb);
+                        const { error } = await supabaseClient.from('noemie').upsert(dbNoemie);
+                        if (error) throw error;
+                    }
+
+                    // Restauration locale des paramètres
+                    if (oldRetro.length > 0) localStorage.setItem('retro_data', JSON.stringify(oldRetro));
+                    if (oldPraticiens.length > 0) localStorage.setItem('praticiens_data_v2', JSON.stringify(oldPraticiens));
+
+                    alert("🎉 Importation réussie ! Tes données sont maintenant synchronisées dans le cloud.");
+                    window.location.reload();
+
+                } catch (err) {
+                    console.error("Erreur d'import :", err);
+                    alert("Erreur lors de l'importation : " + err.message);
+                } finally {
+                    document.body.style.cursor = 'default';
+                    event.target.value = ''; 
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        // ==========================================
+        // ERGONOMIE : NAVIGATION AVEC LA TOUCHE ENTRÉE
+        // ==========================================
+        function handleFormEnter(e, containerId, columnsClasses) {
+            if (e.key === 'Enter') {
+                const active = document.activeElement; 
+                if (!active || active.tagName === 'BUTTON') return;
+                
+                let currentClass = columnsClasses.find(cls => active.classList.contains(cls)); 
+                if (!currentClass) return; 
+                
+                // On empêche la touche Entrée de valider le formulaire
+                e.preventDefault(); 
+                
+                const container = document.getElementById(containerId);
+                let colIndex = columnsClasses.indexOf(currentClass); 
+                let inputsInCol = Array.from(container.querySelectorAll('.' + currentClass)); 
+                let currentIndex = inputsInCol.indexOf(active);
+                
+                // Logique de passage au champ suivant
+                if (currentIndex >= 0 && currentIndex < inputsInCol.length - 1) { 
+                    inputsInCol[currentIndex + 1].focus(); 
+                } else {
+                    if (colIndex < columnsClasses.length - 1) { 
+                        let nextInputs = container.querySelectorAll('.' + columnsClasses[colIndex + 1]); 
+                        if (nextInputs.length > 0) nextInputs[0].focus(); 
+                    } else { 
+                        active.blur(); 
+                    }
+                }
+            }
+        }
+</script>
+</body>
+</html>
