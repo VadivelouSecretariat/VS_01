@@ -70,7 +70,7 @@
                     <div class="flex bg-teal-800 rounded-lg p-1 items-center overflow-x-auto">
                         <button onclick="switchPage('dashboardPage')" id="navDashboard" class="px-3 py-1.5 text-sm font-semibold rounded bg-teal-600 text-white transition whitespace-nowrap">Factures</button>
                         <button onclick="switchPage('noemiePage')" id="navNoemie" class="px-3 py-1.5 text-sm font-semibold rounded text-teal-200 hover:text-white hover:bg-teal-600/50 transition whitespace-nowrap">Retours NOEMIE</button>
-                        <button onclick="switchPage('retrosPage')" id="navRetros" class="px-3 py-1.5 text-sm font-semibold rounded text-teal-200 hover:text-white hover:bg-teal-600/50 transition whitespace-nowrap">Rétros</button>
+                        <button onclick="switchPage('retrosPage')" id="navRetros" class="hidden px-3 py-1.5 text-sm font-semibold rounded text-teal-200 hover:text-white hover:bg-teal-600/50 transition whitespace-nowrap">Rétros</button>
                         <button onclick="openImpayesModal()" class="px-3 py-1.5 text-sm font-semibold rounded text-rose-200 hover:text-white hover:bg-rose-600/50 transition bg-rose-700/50 ml-1 whitespace-nowrap">⚠️ Impayés</button>
                     </div>
                 </h1>
@@ -842,6 +842,11 @@
         async function deconnecterAdmin() {
             await supabaseClient.auth.signOut();
             cabinetActifId = null;
+            
+            // On vide les champs de connexion
+            document.getElementById('login-email').value = '';
+            document.getElementById('login-password').value = '';
+            
             document.getElementById('ecran-travail').classList.add('hidden');
             document.getElementById('ecran-dashboard').classList.add('hidden');
             document.getElementById('ecran-login').classList.remove('hidden');
@@ -854,12 +859,50 @@
             const container = document.getElementById('liste-cabinets');
             container.innerHTML = '';
             data.forEach(cab => {
+                // On sécurise les apostrophes pour les passer dans les fonctions JS
+                const safeNom = cab.nom.replace(/'/g, "\\'");
+                const safeCode = cab.code_acces ? cab.code_acces.replace(/'/g, "\\'") : '';
+
                 container.innerHTML += `
-                    <div onclick="demanderCode('${cab.id}', '${cab.nom.replace(/'/g, "\\'")}')" class="bg-white p-6 rounded-xl shadow-md border-t-4 border-teal-500 cursor-pointer hover:-translate-y-1 hover:shadow-lg transition">
-                        <h3 class="text-xl font-bold text-gray-800 mb-2">${cab.nom}</h3>
-                        <p class="text-sm font-bold text-teal-600 flex items-center gap-1">🔒 Déverrouiller ➔</p>
+                    <div class="relative bg-white p-6 rounded-xl shadow-md border-t-4 border-teal-500 cursor-pointer hover:-translate-y-1 hover:shadow-lg transition">
+                        <!-- Bouton Modifier (stopPropagation empêche de déclencher l'ouverture du cabinet) -->
+                        <button onclick="event.stopPropagation(); modifierCabinet('${cab.id}', '${safeNom}', '${safeCode}')" class="absolute top-3 right-3 text-gray-400 hover:text-blue-600 transition bg-gray-50 hover:bg-blue-50 rounded p-1.5" title="Modifier le nom ou le code">✎</button>
+                        
+                        <div onclick="demanderCode('${cab.id}', '${safeNom}')" class="h-full pt-2">
+                            <h3 class="text-xl font-bold text-gray-800 mb-2 pr-6">${cab.nom}</h3>
+                            <p class="text-sm font-bold text-teal-600 flex items-center gap-1">🔒 Déverrouiller ➔</p>
+                        </div>
                     </div>`;
             });
+        }
+
+        // Nouvelle fonction pour éditer le nom et le mot de passe du cabinet
+        async function modifierCabinet(id, nomActuel, codeActuel) {
+            const nouveauNom = prompt("Modifier le nom du cabinet :", nomActuel);
+            if (nouveauNom === null) return; // L'utilisateur a cliqué sur "Annuler"
+
+            const nouveauCode = prompt("Modifier le code secret d'accès :", codeActuel);
+            if (nouveauCode === null) return; // L'utilisateur a cliqué sur "Annuler"
+
+            if (nouveauNom.trim() === "" || nouveauCode.trim() === "") {
+                alert("Le nom et le code ne peuvent pas être vides.");
+                return;
+            }
+
+            document.body.style.cursor = 'wait';
+            
+            const { error } = await supabaseClient
+                .from('cabinets')
+                .update({ nom: nouveauNom.trim(), code_acces: nouveauCode.trim() })
+                .eq('id', id);
+                
+            document.body.style.cursor = 'default';
+
+            if (error) {
+                alert("Erreur lors de la modification : " + error.message);
+            } else {
+                chargerCabinets(); // On rafraîchit l'affichage
+            }
         }
 
         async function creerCabinet() {
