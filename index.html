@@ -2181,65 +2181,69 @@
 
         function parseBordereauLot(text) {
             let fses = [];
-            let lotNum = '';
             
-            // 1. Recherche du N° de Lot (Ex: "571 élaboré le...")
-            const lotMatch = text.match(/(\d{1,5})\s+élaboré le/i) || text.match(/Lot\s+(\d+)/i);
-            if (lotMatch) lotNum = lotMatch[1];
+            // 1. Recherche du N° de Lot (Ex: "571 élaboré le 13/07/2026")
+            const lotMatch = text.match(/(\d{1,5})\s+élaboré le/i) || text.match(/Lot\s+(\d+)/i) || text.match(/Référence interne du lot[\s:]+(\d+)/i);
+            let lotNum = lotMatch ? lotMatch[1] : '';
             
-            // 2. Recherche des factures
-            // Le logiciel place le nom de l'assuré juste avant le N° FSE, suivi d'un séparateur "|" et de la date de naissance.
-            const fseRegex = /([A-ZÀ-ÿa-z\'-]+(?:\s+[A-ZÀ-ÿa-z\'-]+)*)\s+(\d{9})\s*\|\s*(\d{2}\/\d{2}\/\d{4})/g;
-            
-            let matches = [];
+            // 2. Trouver tous les numéros FSE (9 chiffres suivis d'une barre | et d'une date de naissance)
+            const fseRegex = /(\d{9})\s*\|\s*\d{2}\/\d{2}\/\d{4}/g;
             let match;
+            let fseIndices = [];
+            
             while ((match = fseRegex.exec(text)) !== null) {
-                matches.push({
-                    index: match.index,
-                    nom: match[1].trim(),
-                    fse: match[2]
+                fseIndices.push({
+                    fse: match[1],
+                    index: match.index
                 });
             }
             
-            // 3. Extraction des données pour chaque facture trouvée
-            for (let i = 0; i < matches.length; i++) {
-                // On isole le bloc de texte spécifique à cette facture
-                let start = matches[i].index;
-                let end = (i + 1 < matches.length) ? matches[i+1].index : text.length;
-                let chunk = text.substring(start, end);
+            // 3. Extraction des données pour chaque facture
+            for (let i = 0; i < fseIndices.length; i++) {
+                let currentFSE = fseIndices[i].fse;
+                let currentIndex = fseIndices[i].index;
                 
-                // Extraction du prénom (il suit la date de naissance et le rang du bénéficiaire)
-                let prenom = "";
-                let prenomMatch = chunk.match(/\d{2}\/\d{2}\/\d{4}\s+\d+\s+([A-ZÀ-ÿa-z\'-]+(?:\s+[A-ZÀ-ÿa-z\'-]+)*)/);
-                if (prenomMatch) prenom = prenomMatch[1].trim();
+                // --- NOM (On prend le texte en majuscules juste avant le N° FSE) ---
+                let textBefore = text.substring(0, currentIndex).trim();
+                let nomMatch = textBefore.match(/([A-ZÀ-ÿ\'-]+(?:\s+[A-ZÀ-ÿ\'-]+)*)$/);
+                let nom = nomMatch ? nomMatch[1].trim() : 'Inconnu';
                 
+                // --- PRÉNOM (On cherche entre la date de naissance et le N° de Sécu) ---
+                let textAfter = text.substring(currentIndex + 9); // On saute le N° FSE
+                let prenomMatch = textAfter.match(/\|\s*\d{2}\/\d{2}\/\d{4}\s*\d+\s+([A-ZÀ-ÿ\'-]+(?:\s+[A-ZÀ-ÿ\'-]+)*)\s+\d{13}/);
+                let prenom = prenomMatch ? prenomMatch[1].trim() : '';
+                
+                // --- MONTANTS ---
+                let endOfChunk = (i + 1 < fseIndices.length) ? fseIndices[i+1].index : text.length;
+                let chunk = text.substring(currentIndex, endOfChunk);
+                
+                // On isole la zone financière (tout ce qui vient après le Numéro de Sécu)
+                let parts = chunk.split(/\d{13,15}(?:\s\d{2})?/);
+                let amountArea = parts.length > 1 ? parts[1] : chunk;
+                
+                // On trouve tous les nombres au format XX,XX
+                let amounts = amountArea.match(/(\d+,\d{2})/g);
                 let partRO = '0', partRC = '0';
                 
-                // Le tableau PDF utilise des barres verticales "|" pour séparer les colonnes
-                let pipes = chunk.split('|');
-                
-                // Si la structure du tableau est respectée
-                if (pipes.length >= 7) {
-                    // La 6ème colonne (index 5) correspond à la "Part AMO" (RO)
-                    let pAMO = pipes[5].match(/(\d+,\d{2})/);
-                    // La 7ème colonne (index 6) correspond à la "Part AMC" (RC)
-                    let pAMC = pipes[6].match(/(\d+,\d{2})/);
-                    
-                    if (pAMO) partRO = pAMO[1];
-                    if (pAMC) partRC = pAMC[1];
-                } else {
-                    // Sécurité de secours : si PDF.js a "avalé" les barres verticales,
-                    // on récupère les montants à la fin de la ligne.
-                    let amounts = chunk.match(/(\d+,\d{2})/g);
-                    if (amounts && amounts.length >= 3) {
-                        partRO = amounts[amounts.length - 3]; // Part AMO supposée
-                        partRC = amounts[amounts.length - 2]; // Part AMC supposée
+                if (amounts) {
+                    if (amounts.length === 2) {
+                        // 2 montants trouvés = Part AMO et Total (donc AMC = 0)
+                        partRO = amounts[0];
+                        partRC = '0';
+                    } else if (amounts.length === 3) {
+                        // 3 montants trouvés = Part AMO, Part AMC, Total
+                        partRO = amounts[0];
+                        partRC = amounts[1];
+                    } else if (amounts.length >= 4) {
+                        // 4 montants trouvés = Part Assuré, Part AMO, Part AMC, Total
+                        partRO = amounts[1]; 
+                        partRC = amounts[2]; 
                     }
                 }
                 
                 fses.push({
-                    numFSE: matches[i].fse,
-                    patient: `${matches[i].nom} ${prenom}`.trim(),
+                    numFSE: currentFSE,
+                    patient: `${nom} ${prenom}`.trim(),
                     partRO: partRO.replace(',', '.'),
                     partRC: partRC.replace(',', '.')
                 });
