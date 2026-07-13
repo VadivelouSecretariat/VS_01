@@ -6,6 +6,11 @@
     <title>Suivi des Règlements - Pro Santé (Multi-Cabinets)</title>
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- Moteur PDF.js pour la lecture locale des bordereaux -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
+    <script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+    </script>
     <style>
         .page-hidden { display: none !important; }
         input[type=number]::-webkit-inner-spin-button, 
@@ -349,6 +354,16 @@
                                     <button type="button" onclick="updateNbFseRows()" class="w-full bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-2 rounded text-xs transition shadow-sm border border-gray-300 h-[38px] px-1 truncate">Ajouter</button>
                                 </div>
                             </div>
+                        </div>
+
+                        <!-- ZONE DE DÉPÔT PDF -->
+                        <div id="pdf-drop-zone" class="mb-4 border-2 border-dashed border-teal-400 bg-teal-50/50 rounded-lg p-6 text-center cursor-pointer hover:bg-teal-100 transition"
+                            ondragover="event.preventDefault(); this.classList.add('bg-teal-200');"
+                            ondragleave="this.classList.remove('bg-teal-200');"
+                            ondrop="handlePDFDrop(event)">
+                            <p class="text-sm font-bold text-teal-800">📄 Glissez-déposez vos Duplicatas FSE (PDF) ici</p>
+                            <p class="text-xs text-teal-600 mt-1">L'extraction remplira automatiquement les lignes en dessous.</p>
+                            <input type="file" id="pdf-file-input" multiple accept="application/pdf" class="hidden" onchange="processSelectedPDFs(event)">
                         </div>
 
                         <div class="bg-indigo-50/40 p-4 rounded-lg border border-indigo-200">
@@ -2082,6 +2097,114 @@
                     }
                 }
             }
+        }
+
+        // ==========================================
+        // IMPORTATION AUTOMATIQUE DE FSE VIA PDF
+        // ==========================================
+        
+        // Rendre la zone cliquable pour ouvrir l'explorateur de fichiers
+        document.getElementById('pdf-drop-zone').addEventListener('click', () => {
+            document.getElementById('pdf-file-input').click();
+        });
+
+        async function handlePDFDrop(event) {
+            event.preventDefault();
+            event.currentTarget.classList.remove('bg-teal-200');
+            
+            const files = event.dataTransfer.files;
+            if (files.length > 0) {
+                await processPDFList(files);
+            }
+        }
+
+        async function processSelectedPDFs(event) {
+            const files = event.target.files;
+            if (files.length > 0) {
+                await processPDFList(files);
+            }
+            event.target.value = ''; // Remet l'input à zéro pour pouvoir re-sélectionner le même fichier si besoin
+        }
+
+        async function processPDFList(files) {
+            document.body.style.cursor = 'wait';
+            
+            for (let file of files) {
+                if (file.type !== 'application/pdf') continue;
+                
+                try {
+                    const arrayBuffer = await file.arrayBuffer();
+                    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                    let fullText = '';
+                    
+                    // Extraction du texte de chaque page du PDF
+                    for (let i = 1; i <= pdf.numPages; i++) {
+                        const page = await pdf.getPage(i);
+                        const textContent = await page.getTextContent();
+                        const pageText = textContent.items.map(item => item.str).join(' ');
+                        fullText += pageText + ' ';
+                    }
+                    
+                    // Parsing du texte extrait
+                    const data = parseFSEText(fullText);
+                    
+                    // Pré-remplissage intelligent
+                    // Si la première ligne de la liste est complètement vide, on l'utilise
+                    const firstRow = document.querySelector('#fseFacturesList .fse-row:first-child');
+                    const isFirstRowEmpty = firstRow && !firstRow.querySelector('.fse-num-input').value && !firstRow.querySelector('.fse-patient-input').value;
+                    
+                    if (isFirstRowEmpty) {
+                        firstRow.querySelector('.fse-num-input').value = data.numFSE;
+                        firstRow.querySelector('.fse-patient-input').value = data.patient;
+                        firstRow.querySelector('.fse-ro-input').value = data.partRO;
+                        firstRow.querySelector('.fse-rc-input').value = data.partRC;
+                        updateFseTotals();
+                    } else {
+                        // Sinon, on ajoute une nouvelle ligne à la suite
+                        addFseRow(data.numFSE, data.patient, data.partRO, data.partRC);
+                    }
+                    
+                } catch (err) {
+                    console.error("Erreur de lecture du PDF :", err);
+                    alert("Impossible de lire et d'extraire les données du fichier : " + file.name);
+                }
+            }
+            
+            document.body.style.cursor = 'default';
+        }
+
+        function parseFSEText(text) {
+            let numFSE = '', patient = '', partRO = '0', partRC = '0';
+
+            // Cible : "Feuille de soins numéro: 002019089"
+            const numMatch = text.match(/num[eé]ro[\s:]*(\d+)/i);
+            if (numMatch) numFSE = numMatch[1];
+
+            // Cible : "Bénéficiaire: M'SAIDIE ALI Né(e) le:"
+            const patMatch = text.match(/B[eé]n[eé]ficiaire[\s:]*(.+?)\s*N[eé]\(e\)/i);
+            if (patMatch) patient = patMatch[1].trim();
+
+            // Cible : "Total participation AMO: 111,16"
+            const amoMatch = text.match(/participation AMO[\s:]*([\d,]+)/i);
+            if (amoMatch) partRO = amoMatch[1];
+
+            // Cible : "Total participation AMC" et le dernier montant situé en dessous
+            const amcSplit = text.split(/participation AMC/i);
+            if (amcSplit.length > 1) {
+                const amcBlock = amcSplit[1];
+                // Recherche toutes les sommes au format XX,XX
+                const allAmounts = amcBlock.match(/([\d]+,[\d]{2})/g);
+                if (allAmounts && allAmounts.length > 0) {
+                    partRC = allAmounts[allAmounts.length - 1]; 
+                }
+            }
+
+            return {
+                numFSE,
+                patient,
+                partRO: partRO.replace(',', '.'),
+                partRC: partRC.replace(',', '.')
+            };
         }
 </script>
 </body>
