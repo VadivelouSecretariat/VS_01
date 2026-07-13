@@ -2196,82 +2196,88 @@
         function parseBordereauLot(text) {
             let fses = [];
             
-            // Tes excellents indices traduits en code :
+            // 1. Nettoyage absolu : on met tout sur une seule ligne avec des espaces simples
+            let cleanText = text.replace(/[\r\n\|]/g, ' ').replace(/\s+/g, ' ');
             
-            // 1. La CAISSE (juste après le texte "Destinataire :")
+            // 2. La CAISSE (Correction du bug : on prend tout jusqu'au mot "Régime")
             let caisse = '';
-            let matchCaisse = text.match(/Destinataire\s*:\s*([^R[eé]gime\n\|]+)/i);
+            let matchCaisse = cleanText.match(/Destinataire\s*:\s*(.*?)(?=\s*R[eé]gime)/i);
             if (matchCaisse) {
                 caisse = matchCaisse[1].trim();
             }
             
-            // 2. La DATE du lot (juste après "élaboré le")
+            // 3. La DATE du lot
             let dateLot = '';
-            let matchDate = text.match(/[eé]labor[eé] le\s*(\d{2}\/\d{2}\/\d{4})/i);
+            let matchDate = cleanText.match(/[eé]labor[eé] le\s*(\d{2}\/\d{2}\/\d{4})/i);
             if (matchDate) {
                 dateLot = matchDate[1];
             }
             
-            // 3. Le TYPE de lot (Sécurisé / Dégradé)
-            let isDegrade = false;
-            if (text.match(/Lot\s*d[eé]grad[eé]/i)) isDegrade = true;
+            // 4. Le TYPE de lot
+            let isDegrade = /Lot\s*d[eé]grad[eé]/i.test(cleanText);
             
-            // 4. Le NUMÉRO de lot 
+            // 5. Le NUMÉRO de lot
             let lotNum = '';
-            let matchLot = text.match(/(?:s[eé]curis[eé]|d[eé]grad[eé])[\s\|-]*(\d+)/i) || text.match(/R[eé]f[eé]rence interne du lot[\s:]+(\d+)/i) || text.match(/(\d{1,5})\s+[eé]labor[eé] le/i);
+            let matchLot = cleanText.match(/(?:s[eé]curis[eé]|d[eé]grad[eé])\s+(\d+)/i) || 
+                           cleanText.match(/R[eé]f[eé]rence interne du lot[\s:]+(\d+)/i) || 
+                           cleanText.match(/(\d{1,5})\s+[eé]labor[eé] le/i);
             if (matchLot) {
                 lotNum = matchLot[1];
             }
             
-            // 5. Extraction des FACTURES
-            // On isole la partie basse du document (à partir de "Total facturé") pour cibler le tableau
-            let startTable = text.indexOf("Total facturé");
-            let dataChunk = startTable !== -1 ? text.substring(startTable) : text;
-            dataChunk = dataChunk.split(/facture(?:\(s\))? dans ce lot/i)[0]; // On s'arrête à la conclusion
+            // 6. Extraction des FACTURES
+            // On isole la zone du tableau, et on coupe avant les totaux de fin pour ne pas les confondre avec une facture
+            let startTable = cleanText.indexOf("Total facturé");
+            let dataChunk = startTable !== -1 ? cleanText.substring(startTable) : cleanText;
+            let endTable = dataChunk.search(/facture(?:\(s\))? dans ce lot/i);
+            if (endTable !== -1) {
+                dataChunk = dataChunk.substring(0, endTable);
+            }
             
-            // Le Nom du patient est juste à côté du numéro de facture (les 9 chiffres consécutifs)
-            const rowRegex = /([A-ZÀ-ÿ\'-]+(?: [A-ZÀ-ÿ\'-]+)*)\s+(\d{9})/g;
+            // Regex INFAILLIBLE : Nom + N° FSE (9 chiffres) + Date Naissance + Rang + Prénom
+            const rowRegex = /([A-ZÀ-ÿ\'-]+(?: [A-ZÀ-ÿ\'-]+)*)\s+(\d{9})\s+(\d{2}\/\d{2}\/\d{4})\s+\d{1,2}\s+([A-ZÀ-ÿ\'-]+(?: [A-ZÀ-ÿ\'-]+)*)/g;
             let matches = [];
             let match;
             while ((match = rowRegex.exec(dataChunk)) !== null) {
                 matches.push({
+                    index: match.index,
+                    length: match[0].length,
                     nom: match[1].trim(),
                     fse: match[2],
-                    index: match.index
+                    prenom: match[4].trim()
                 });
             }
             
-            // 6. Extraction des montants (Part AMO / Part AMC) pour chaque patient
+            // 7. Extraction des MONTANTS pour chaque facture trouvée
             for (let i = 0; i < matches.length; i++) {
-                let start = matches[i].index;
+                // On isole la suite de la ligne (qui contient le N° sécu et les montants financiers)
+                let start = matches[i].index + matches[i].length;
                 let end = (i + 1 < matches.length) ? matches[i+1].index : dataChunk.length;
                 let chunk = dataChunk.substring(start, end);
                 
                 let partRO = '0', partRC = '0';
-                // On liste tous les montants au format XX,XX trouvés sur la ligne du patient
-                let amounts = chunk.match(/\b\d+,\d{2}\b/g);
+                
+                // On récupère tous les chiffres avec une virgule (ex: 111,16)
+                let amounts = chunk.match(/\d+,\d{2}/g);
                 
                 if (amounts) {
-                    // S'il y a 2 montants (ex: 111,16 | 111,16) -> c'est l'AMO et le Total. Donc AMC (RC) = 0
-                    if (amounts.length === 2) {
+                    if (amounts.length === 1) {
                         partRO = amounts[0];
-                        partRC = '0';
-                    }
-                    // S'il y a 3 montants (ex: AMO | AMC | Total)
-                    else if (amounts.length === 3) {
-                        partRO = amounts[0];
-                        partRC = amounts[1];
-                    }
-                    // S'il y a 4 montants ou plus (ex: Part Assuré | AMO | AMC | Total)
-                    else if (amounts.length >= 4) {
-                        partRO = amounts[amounts.length - 3];
-                        partRC = amounts[amounts.length - 2];
+                    } else if (amounts.length === 2) {
+                        partRO = amounts[0]; // AMO
+                        // amounts[1] est le Total Facturé, on l'ignore. RC reste à 0.
+                    } else if (amounts.length === 3) {
+                        partRO = amounts[0]; // AMO
+                        partRC = amounts[1]; // AMC
+                    } else if (amounts.length >= 4) {
+                        partRO = amounts[amounts.length - 3]; // AMO
+                        partRC = amounts[amounts.length - 2]; // AMC
                     }
                 }
                 
                 fses.push({
                     numFSE: matches[i].fse,
-                    patient: matches[i].nom, // On utilise ton point d'ancrage "Nom à côté de la FSE"
+                    patient: `${matches[i].nom} ${matches[i].prenom}`,
                     partRO: partRO.replace(',', '.'),
                     partRC: partRC.replace(',', '.')
                 });
