@@ -2216,11 +2216,11 @@
                            cleanText.match(/(\d{1,5})\s+[eé]labor[eé] le/i);
             if (matchLot) lotNum = matchLot[1];
             
-            // 3. EXTRACTION DES FACTURES (Méthode des Balises Temporelles)
+            // 3. EXTRACTION DES FACTURES 
             let startTable = cleanText.indexOf("Total factur");
             let dataChunk = startTable !== -1 ? cleanText.substring(startTable) : cleanText;
             
-            // On repère TOUTES les factures (les blocs de 8 à 9 chiffres stricts, ce qui exclut les N° de Sécu)
+            // On repère TOUTES les factures (les blocs de 8 à 9 chiffres stricts)
             const fseRegex = /\b(\d{8,9})\b/g;
             let fsesFound = [];
             let match;
@@ -2231,39 +2231,31 @@
             
             // 4. On découpe les informations autour de chaque facture trouvée
             for (let i = 0; i < fsesFound.length; i++) {
+                let numFSE = fsesFound[i].fse;
+                let indexFSE = fsesFound[i].index;
                 
-                // --- RECHERCHE DU NOM (Le texte avant le N° FSE) ---
-                let textBefore = "";
-                if (i === 0) {
-                    // Pour le 1er patient, c'est le texte depuis "Total facturé"
-                    textBefore = dataChunk.substring(0, fsesFound[i].index).replace(/Total factur[eé]/i, '');
-                } else {
-                    // Pour les suivants, c'est le texte depuis le N° de Sécu du patient précédent
-                    let chunkPrev = dataChunk.substring(fsesFound[i-1].index + fsesFound[i-1].fse.length, fsesFound[i].index);
-                    let partsPrev = chunkPrev.split(/\b\d{13,15}\b/);
-                    textBefore = partsPrev.length > 1 ? partsPrev[partsPrev.length - 1] : chunkPrev;
-                }
+                // --- RECHERCHE DU NOM (Lecture à reculons juste avant le N° FSE) ---
+                let startIndex = i === 0 ? 0 : fsesFound[i-1].index + fsesFound[i-1].fse.length;
+                let textBefore = dataChunk.substring(startIndex, indexFSE).trim();
                 
-                // On garde uniquement les mots (exclut "né(e)", les dates, etc.)
-                let motsNom = textBefore.match(/[A-ZÀ-ÿa-z\'-]+/g);
-                // On retire les petits mots parasites qui pourraient trainer
-                let cleanMotsNom = motsNom ? motsNom.filter(m => m.length > 1 && !m.toLowerCase().includes('facture')) : [];
-                let nom = cleanMotsNom.length > 0 ? cleanMotsNom.join(' ') : "Inconnu";
+                // On attrape la dernière suite de lettres (ex: M'SAIDIE ou GIL RUIZ) juste avant le chiffre
+                let nomMatch = textBefore.match(/([A-Za-zÀ-ÿ\'-]+(?:\s+[A-Za-zÀ-ÿ\'-]+)*)\s*$/);
+                // On s'assure d'effacer le mot "Total facturé" s'il s'est collé au premier patient
+                let nom = nomMatch ? nomMatch[1].replace(/Total factur[eé]/i, '').trim() : '';
                 
-                // --- RECHERCHE DU PRÉNOM (Le texte entre le N° FSE et le N° de Sécu) ---
-                let endChunk = (i + 1 < fsesFound.length) ? fsesFound[i+1].index : dataChunk.length;
-                let chunkAfter = dataChunk.substring(fsesFound[i].index + fsesFound[i].fse.length, endChunk);
+                // --- RECHERCHE DU PRÉNOM (Lecture juste après le N° FSE) ---
+                let endIndex = (i + 1 < fsesFound.length) ? fsesFound[i+1].index : dataChunk.length;
+                let textAfter = dataChunk.substring(indexFSE + numFSE.length, endIndex);
                 
-                let textBeforeNIR = chunkAfter.split(/\b\d{13,15}\b/)[0];
-                let motsPrenom = textBeforeNIR.match(/[A-ZÀ-ÿa-z\'-]+/g);
-                let cleanMotsPrenom = motsPrenom ? motsPrenom.filter(m => m.length > 1) : [];
-                let prenom = cleanMotsPrenom.length > 0 ? cleanMotsPrenom.join(' ') : "";
+                // Le prénom se trouve avant le NIR de la sécu (13-15 chiffres)
+                let textBeforeNIR = textAfter.split(/\b\d{13,15}\b/)[0];
+                let prenomMatch = textBeforeNIR.match(/([A-Za-zÀ-ÿ\'-]+(?:\s+[A-Za-zÀ-ÿ\'-]+)*)\s*$/);
+                let prenom = prenomMatch ? prenomMatch[1].trim() : '';
                 
                 // --- RECHERCHE DES MONTANTS (Le texte après le N° de Sécu) ---
-                let partsNIR = chunkAfter.split(/\b\d{13,15}\b/);
-                let amountArea = partsNIR.length > 1 ? partsNIR[1] : chunkAfter;
-                // On coupe avant les phrases de conclusion du PDF
-                amountArea = amountArea.split(/facture(?:\(s\))? dans ce lot/i)[0];
+                let partsNIR = textAfter.split(/\b\d{13,15}\b/);
+                let amountArea = partsNIR.length > 1 ? partsNIR[1] : textAfter;
+                amountArea = amountArea.split(/facture(?:\(s\))? dans ce lot/i)[0]; // On coupe la fin du document
                 
                 let amounts = amountArea.match(/\b\d+,\d{2}\b/g);
                 let partRO = '0', partRC = '0';
@@ -2283,7 +2275,7 @@
                 }
                 
                 fses.push({
-                    numFSE: fsesFound[i].fse,
+                    numFSE: numFSE,
                     patient: `${nom} ${prenom}`.trim(),
                     partRO: partRO.replace(',', '.'),
                     partRC: partRC.replace(',', '.')
