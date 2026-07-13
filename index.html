@@ -2100,7 +2100,7 @@
         }
 
         // ==========================================
-        // IMPORTATION AUTOMATIQUE DE FSE VIA PDF
+        // IMPORTATION AUTOMATIQUE DE BORDEREAUX DE LOTS (PDF)
         // ==========================================
         
         // Rendre la zone cliquable pour ouvrir l'explorateur de fichiers
@@ -2123,7 +2123,7 @@
             if (files.length > 0) {
                 await processPDFList(files);
             }
-            event.target.value = ''; // Remet l'input à zéro pour pouvoir re-sélectionner le même fichier si besoin
+            event.target.value = ''; // Remet l'input à zéro
         }
 
         async function processPDFList(files) {
@@ -2137,7 +2137,6 @@
                     const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
                     let fullText = '';
                     
-                    // Extraction du texte de chaque page du PDF
                     for (let i = 1; i <= pdf.numPages; i++) {
                         const page = await pdf.getPage(i);
                         const textContent = await page.getTextContent();
@@ -2145,24 +2144,31 @@
                         fullText += pageText + ' ';
                     }
                     
-                    // Parsing du texte extrait
-                    const data = parseFSEText(fullText);
+                    const data = parseBordereauLot(fullText);
                     
-                    // Pré-remplissage intelligent
-                    // Si la première ligne de la liste est complètement vide, on l'utilise
-                    const firstRow = document.querySelector('#fseFacturesList .fse-row:first-child');
-                    const isFirstRowEmpty = firstRow && !firstRow.querySelector('.fse-num-input').value && !firstRow.querySelector('.fse-patient-input').value;
-                    
-                    if (isFirstRowEmpty) {
-                        firstRow.querySelector('.fse-num-input').value = data.numFSE;
-                        firstRow.querySelector('.fse-patient-input').value = data.patient;
-                        firstRow.querySelector('.fse-ro-input').value = data.partRO;
-                        firstRow.querySelector('.fse-rc-input').value = data.partRC;
-                        updateFseTotals();
-                    } else {
-                        // Sinon, on ajoute une nouvelle ligne à la suite
-                        addFseRow(data.numFSE, data.patient, data.partRO, data.partRC);
+                    // 1. Remplissage automatique du numéro de lot (s'il est vide)
+                    if (data.lotNum && !document.getElementById('fseLot').value) {
+                        document.getElementById('fseLot').value = data.lotNum;
                     }
+                    
+                    // 2. Ajout dynamique de toutes les factures trouvées
+                    data.fses.forEach(fse => {
+                        const firstRow = document.querySelector('#fseFacturesList .fse-row:first-child');
+                        const isFirstRowEmpty = firstRow && !firstRow.querySelector('.fse-num-input').value && !firstRow.querySelector('.fse-patient-input').value;
+                        
+                        // Si c'est la toute première facture et que la ligne est vide, on l'utilise
+                        if (isFirstRowEmpty && document.querySelectorAll('#fseFacturesList .fse-row').length === 1) {
+                            firstRow.querySelector('.fse-num-input').value = fse.numFSE;
+                            firstRow.querySelector('.fse-patient-input').value = fse.patient;
+                            firstRow.querySelector('.fse-ro-input').value = fse.partRO;
+                            firstRow.querySelector('.fse-rc-input').value = fse.partRC;
+                        } else {
+                            // Sinon, on génère une nouvelle ligne en dessous
+                            addFseRow(fse.numFSE, fse.patient, fse.partRO, fse.partRC);
+                        }
+                    });
+                    
+                    updateFseTotals();
                     
                 } catch (err) {
                     console.error("Erreur de lecture du PDF :", err);
@@ -2173,38 +2179,57 @@
             document.body.style.cursor = 'default';
         }
 
-        function parseFSEText(text) {
-            let numFSE = '', patient = '', partRO = '0', partRC = '0';
-
-            // Cible : "Feuille de soins numéro: 002019089"
-            const numMatch = text.match(/num[eé]ro[\s:]*(\d+)/i);
-            if (numMatch) numFSE = numMatch[1];
-
-            // Cible : "Bénéficiaire: M'SAIDIE ALI Né(e) le:"
-            const patMatch = text.match(/B[eé]n[eé]ficiaire[\s:]*(.+?)\s*N[eé]\(e\)/i);
-            if (patMatch) patient = patMatch[1].trim();
-
-            // Cible : "Total participation AMO: 111,16"
-            const amoMatch = text.match(/participation AMO[\s:]*([\d,]+)/i);
-            if (amoMatch) partRO = amoMatch[1];
-
-            // Cible : "Total participation AMC" et le dernier montant situé en dessous
-            const amcSplit = text.split(/participation AMC/i);
-            if (amcSplit.length > 1) {
-                const amcBlock = amcSplit[1];
-                // Recherche toutes les sommes au format XX,XX
-                const allAmounts = amcBlock.match(/([\d]+,[\d]{2})/g);
-                if (allAmounts && allAmounts.length > 0) {
-                    partRC = allAmounts[allAmounts.length - 1]; 
-                }
+        function parseBordereauLot(text) {
+            let fses = [];
+            let lotNum = '';
+            
+            // Extraction du numéro de lot (Ex: "571 élaboré le 13/07/2026")[cite: 7]
+            const lotMatch = text.match(/(\d{1,4})\s+élaboré le/i) || text.match(/Lot\s+(\d+)/i);
+            if (lotMatch) lotNum = lotMatch[1];
+            
+            // Recherche du bloc de chaque patient (Nom, N° FSE, Date de naissance, Prénom, N° Sécu)[cite: 7]
+            const rowRegex = /([A-Z\'-]+(?:[\s]+[A-Z\'-]+)*)[\s]+(\d{9})[\s]+\|[\s]+\d{2}\/\d{2}\/\d{4}[\s]+\d[\s]+([A-Z\'-]+(?:[\s]+[A-Z\'-]+)*)[\s]+\d{13}/g;
+            
+            let matches = [];
+            let match;
+            while ((match = rowRegex.exec(text)) !== null) {
+                matches.push({
+                    index: match.index,
+                    nom: match[1].trim(),
+                    fse: match[2],
+                    prenom: match[3].trim()
+                });
             }
-
-            return {
-                numFSE,
-                patient,
-                partRO: partRO.replace(',', '.'),
-                partRC: partRC.replace(',', '.')
-            };
+            
+            // Extraction des montants spécifiques pour chaque facture
+            for (let i = 0; i < matches.length; i++) {
+                let start = matches[i].index;
+                let end = (i + 1 < matches.length) ? matches[i+1].index : text.length;
+                let chunk = text.substring(start, end);
+                
+                let partRO = '0', partRC = '0';
+                
+                // On découpe la ligne en utilisant les barres verticales "|" du tableau PDF[cite: 7]
+                let pipes = chunk.split('|');
+                
+                if (pipes.length >= 6) {
+                    // Index 5 correspond à la colonne "Part AMO", Index 6 correspond à "Part AMC"
+                    let pAMO = pipes[5] ? pipes[5].match(/(\d+,\d{2})/) : null;
+                    let pAMC = pipes[6] ? pipes[6].match(/(\d+,\d{2})/) : null;
+                    
+                    if (pAMO) partRO = pAMO[1];
+                    if (pAMC) partRC = pAMC[1];
+                }
+                
+                fses.push({
+                    numFSE: matches[i].fse,
+                    patient: `${matches[i].nom} ${matches[i].prenom}`,
+                    partRO: partRO.replace(',', '.'),
+                    partRC: partRC.replace(',', '.')
+                });
+            }
+            
+            return { lotNum, fses };
         }
 </script>
 </body>
