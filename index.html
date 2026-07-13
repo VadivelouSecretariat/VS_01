@@ -2183,47 +2183,63 @@
             let fses = [];
             let lotNum = '';
             
-            // Extraction du numéro de lot (Ex: "571 élaboré le 13/07/2026")[cite: 7]
-            const lotMatch = text.match(/(\d{1,4})\s+élaboré le/i) || text.match(/Lot\s+(\d+)/i);
+            // 1. Recherche du N° de Lot (Ex: "571 élaboré le...")
+            const lotMatch = text.match(/(\d{1,5})\s+élaboré le/i) || text.match(/Lot\s+(\d+)/i);
             if (lotMatch) lotNum = lotMatch[1];
             
-            // Recherche du bloc de chaque patient (Nom, N° FSE, Date de naissance, Prénom, N° Sécu)[cite: 7]
-            const rowRegex = /([A-Z\'-]+(?:[\s]+[A-Z\'-]+)*)[\s]+(\d{9})[\s]+\|[\s]+\d{2}\/\d{2}\/\d{4}[\s]+\d[\s]+([A-Z\'-]+(?:[\s]+[A-Z\'-]+)*)[\s]+\d{13}/g;
+            // 2. Recherche des factures
+            // Le logiciel place le nom de l'assuré juste avant le N° FSE, suivi d'un séparateur "|" et de la date de naissance.
+            const fseRegex = /([A-ZÀ-ÿa-z\'-]+(?:\s+[A-ZÀ-ÿa-z\'-]+)*)\s+(\d{9})\s*\|\s*(\d{2}\/\d{2}\/\d{4})/g;
             
             let matches = [];
             let match;
-            while ((match = rowRegex.exec(text)) !== null) {
+            while ((match = fseRegex.exec(text)) !== null) {
                 matches.push({
                     index: match.index,
                     nom: match[1].trim(),
-                    fse: match[2],
-                    prenom: match[3].trim()
+                    fse: match[2]
                 });
             }
             
-            // Extraction des montants spécifiques pour chaque facture
+            // 3. Extraction des données pour chaque facture trouvée
             for (let i = 0; i < matches.length; i++) {
+                // On isole le bloc de texte spécifique à cette facture
                 let start = matches[i].index;
                 let end = (i + 1 < matches.length) ? matches[i+1].index : text.length;
                 let chunk = text.substring(start, end);
                 
+                // Extraction du prénom (il suit la date de naissance et le rang du bénéficiaire)
+                let prenom = "";
+                let prenomMatch = chunk.match(/\d{2}\/\d{2}\/\d{4}\s+\d+\s+([A-ZÀ-ÿa-z\'-]+(?:\s+[A-ZÀ-ÿa-z\'-]+)*)/);
+                if (prenomMatch) prenom = prenomMatch[1].trim();
+                
                 let partRO = '0', partRC = '0';
                 
-                // On découpe la ligne en utilisant les barres verticales "|" du tableau PDF[cite: 7]
+                // Le tableau PDF utilise des barres verticales "|" pour séparer les colonnes
                 let pipes = chunk.split('|');
                 
-                if (pipes.length >= 6) {
-                    // Index 5 correspond à la colonne "Part AMO", Index 6 correspond à "Part AMC"
-                    let pAMO = pipes[5] ? pipes[5].match(/(\d+,\d{2})/) : null;
-                    let pAMC = pipes[6] ? pipes[6].match(/(\d+,\d{2})/) : null;
+                // Si la structure du tableau est respectée
+                if (pipes.length >= 7) {
+                    // La 6ème colonne (index 5) correspond à la "Part AMO" (RO)
+                    let pAMO = pipes[5].match(/(\d+,\d{2})/);
+                    // La 7ème colonne (index 6) correspond à la "Part AMC" (RC)
+                    let pAMC = pipes[6].match(/(\d+,\d{2})/);
                     
                     if (pAMO) partRO = pAMO[1];
                     if (pAMC) partRC = pAMC[1];
+                } else {
+                    // Sécurité de secours : si PDF.js a "avalé" les barres verticales,
+                    // on récupère les montants à la fin de la ligne.
+                    let amounts = chunk.match(/(\d+,\d{2})/g);
+                    if (amounts && amounts.length >= 3) {
+                        partRO = amounts[amounts.length - 3]; // Part AMO supposée
+                        partRC = amounts[amounts.length - 2]; // Part AMC supposée
+                    }
                 }
                 
                 fses.push({
                     numFSE: matches[i].fse,
-                    patient: `${matches[i].nom} ${matches[i].prenom}`,
+                    patient: `${matches[i].nom} ${prenom}`.trim(),
                     partRO: partRO.replace(',', '.'),
                     partRC: partRC.replace(',', '.')
                 });
