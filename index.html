@@ -2196,88 +2196,95 @@
         function parseBordereauLot(text) {
             let fses = [];
             
-            // 1. Nettoyage absolu : on met tout sur une seule ligne avec des espaces simples
+            // 1. Nettoyage absolu (on met tout sur une seule ligne)
             let cleanText = text.replace(/[\r\n\|]/g, ' ').replace(/\s+/g, ' ');
             
-            // 2. La CAISSE (Correction du bug : on prend tout jusqu'au mot "Régime")
+            // 2. CAISSE, DATE, TYPE et NUMÉRO DE LOT (Déjà validés par ton test !)
             let caisse = '';
             let matchCaisse = cleanText.match(/Destinataire\s*:\s*(.*?)(?=\s*R[eé]gime)/i);
-            if (matchCaisse) {
-                caisse = matchCaisse[1].trim();
-            }
+            if (matchCaisse) caisse = matchCaisse[1].trim();
             
-            // 3. La DATE du lot
             let dateLot = '';
             let matchDate = cleanText.match(/[eé]labor[eé] le\s*(\d{2}\/\d{2}\/\d{4})/i);
-            if (matchDate) {
-                dateLot = matchDate[1];
-            }
+            if (matchDate) dateLot = matchDate[1];
             
-            // 4. Le TYPE de lot
             let isDegrade = /Lot\s*d[eé]grad[eé]/i.test(cleanText);
             
-            // 5. Le NUMÉRO de lot
             let lotNum = '';
             let matchLot = cleanText.match(/(?:s[eé]curis[eé]|d[eé]grad[eé])\s+(\d+)/i) || 
                            cleanText.match(/R[eé]f[eé]rence interne du lot[\s:]+(\d+)/i) || 
                            cleanText.match(/(\d{1,5})\s+[eé]labor[eé] le/i);
-            if (matchLot) {
-                lotNum = matchLot[1];
-            }
+            if (matchLot) lotNum = matchLot[1];
             
-            // 6. Extraction des FACTURES
-            // On isole la zone du tableau, et on coupe avant les totaux de fin pour ne pas les confondre avec une facture
-            let startTable = cleanText.indexOf("Total facturé");
+            // 3. EXTRACTION DES FACTURES (La nouvelle méthode Infaillible)
+            // On coupe le texte au niveau du tableau pour éviter les fausses lectures
+            let startTable = cleanText.indexOf("Total factur");
             let dataChunk = startTable !== -1 ? cleanText.substring(startTable) : cleanText;
+            
+            // On coupe avant la conclusion ("1 facture dans ce lot")
             let endTable = dataChunk.search(/facture(?:\(s\))? dans ce lot/i);
             if (endTable !== -1) {
                 dataChunk = dataChunk.substring(0, endTable);
             }
             
-            // Regex INFAILLIBLE : Nom + N° FSE (9 chiffres) + Date Naissance + Rang + Prénom
-            const rowRegex = /([A-ZÀ-ÿ\'-]+(?: [A-ZÀ-ÿ\'-]+)*)\s+(\d{9})\s+(\d{2}\/\d{2}\/\d{4})\s+\d{1,2}\s+([A-ZÀ-ÿ\'-]+(?: [A-ZÀ-ÿ\'-]+)*)/g;
+            // ANCRE : On cherche 8 ou 9 chiffres (FSE) SUIVIS d'une Date de Naissance
+            const fseAnchorRegex = /(\d{8,9})\s+(\d{2}\/\d{2}\/\d{4})/g;
             let matches = [];
             let match;
-            while ((match = rowRegex.exec(dataChunk)) !== null) {
+            
+            while ((match = fseAnchorRegex.exec(dataChunk)) !== null) {
+                let index = match.index;
+                
+                // --- NOM ---
+                let textBefore = dataChunk.substring(0, index).trim();
+                // On efface l'en-tête "Total facturé" qui se colle au premier patient
+                textBefore = textBefore.replace(/Total factur[eé]/i, '');
+                // On récupère toutes les lettres depuis le dernier chiffre (qui correspond à la fin de la facture précédente)
+                let nomMatch = textBefore.match(/[^0-9]+$/);
+                let nom = nomMatch ? nomMatch[0].trim() : "Inconnu";
+                
+                // --- PRÉNOM ---
+                let textAfter = dataChunk.substring(index + match[0].length).trim();
+                // Le prénom suit le Rang du bénéficiaire (1 ou 2 chiffres)
+                let prenomMatch = textAfter.match(/^\d{1,2}\s+([A-Za-zÀ-ÿ'’\-]+(?:\s+[A-Za-zÀ-ÿ'’\-]+)*)/);
+                let prenom = prenomMatch ? prenomMatch[1].trim() : "";
+                
                 matches.push({
-                    index: match.index,
-                    length: match[0].length,
-                    nom: match[1].trim(),
-                    fse: match[2],
-                    prenom: match[4].trim()
+                    index: index,
+                    fse: match[1],
+                    nom: nom,
+                    prenom: prenom
                 });
             }
             
-            // 7. Extraction des MONTANTS pour chaque facture trouvée
+            // 4. EXTRACTION DES MONTANTS
             for (let i = 0; i < matches.length; i++) {
-                // On isole la suite de la ligne (qui contient le N° sécu et les montants financiers)
-                let start = matches[i].index + matches[i].length;
+                let start = matches[i].index;
                 let end = (i + 1 < matches.length) ? matches[i+1].index : dataChunk.length;
                 let chunk = dataChunk.substring(start, end);
                 
                 let partRO = '0', partRC = '0';
                 
-                // On récupère tous les chiffres avec une virgule (ex: 111,16)
+                // On liste toutes les sommes (ex: 111,16) liées à ce patient
                 let amounts = chunk.match(/\d+,\d{2}/g);
                 
                 if (amounts) {
                     if (amounts.length === 1) {
                         partRO = amounts[0];
                     } else if (amounts.length === 2) {
-                        partRO = amounts[0]; // AMO
-                        // amounts[1] est le Total Facturé, on l'ignore. RC reste à 0.
+                        partRO = amounts[0]; // S'il y a 2 montants, c'est AMO et Total (donc AMC=0)
                     } else if (amounts.length === 3) {
                         partRO = amounts[0]; // AMO
                         partRC = amounts[1]; // AMC
                     } else if (amounts.length >= 4) {
-                        partRO = amounts[amounts.length - 3]; // AMO
-                        partRC = amounts[amounts.length - 2]; // AMC
+                        partRO = amounts[amounts.length - 3];
+                        partRC = amounts[amounts.length - 2];
                     }
                 }
                 
                 fses.push({
                     numFSE: matches[i].fse,
-                    patient: `${matches[i].nom} ${matches[i].prenom}`,
+                    patient: `${matches[i].nom} ${matches[i].prenom}`.trim(),
                     partRO: partRO.replace(',', '.'),
                     partRC: partRC.replace(',', '.')
                 });
