@@ -1510,39 +1510,53 @@
             document.body.style.cursor = 'default';
         }
 
-        // Démarrage initial
         // ==========================================
-        // GESTION DES CABINETS & CONNEXION (V3 OFFICIELLE)
+        // GESTION DES CABINETS & CONNEXION (V3 SUPABASE CORRIGÉE)
         // ==========================================
         let cabinetsConfig = [];
         let selectedCabinetForLogin = null;
 
-        // 1. Chargement de la configuration des cabinets
-        function loadCabinetsConfig() {
+        // 1. Chargement de la configuration des cabinets depuis SUPABASE
+        async function loadCabinetsConfig() {
             try {
-                cabinetsConfig = JSON.parse(localStorage.getItem('saved_cabinets_v3_secure'));
-                if (!Array.isArray(cabinetsConfig) || cabinetsConfig.length === 0) throw new Error();
+                // Requête vers la table 'cabinets' en utilisant TES vraies colonnes
+                const { data, error } = await supabaseClient.from('cabinets').select('*');
+                
+                if (error) throw error;
+
+                if (data && data.length > 0) {
+                    cabinetsConfig = data;
+                } else {
+                    cabinetsConfig = []; 
+                }
             } catch (e) {
-                // Configuration par défaut si aucun cabinet n'existe
-                cabinetsConfig = [
-                    { id: 'CABINET_1', name: '🏥 Cabinet Principal', code: '0000' }
-                ];
-                localStorage.setItem('saved_cabinets_v3_secure', JSON.stringify(cabinetsConfig));
+                console.error("Erreur de chargement Supabase :", e);
             }
-            // On met à jour le menu déroulant du header (ecran-travail)
+
+            // On met à jour le menu déroulant du header de l'application
             const headerSelect = document.getElementById('globalCabinetFilter');
             if (headerSelect) {
-                headerSelect.innerHTML = cabinetsConfig.map(cab => `<option value="${cab.id}">${cab.name}</option>`).join('');
+                // On utilise bien cab.nom ici
+                headerSelect.innerHTML = cabinetsConfig.map(cab => `<option value="${cab.id}">${cab.nom}</option>`).join('');
+            }
+            
+            // Si on est déjà sur le dashboard des cabinets, on le met à jour
+            if (!document.getElementById('ecran-dashboard').classList.contains('hidden')) {
+                renderCabinetsDashboard();
             }
         }
 
         // 2. Connexion Administrateur
-        function seConnecter() {
+        async function seConnecter() {
             const email = document.getElementById('login-email').value;
             const pwd = document.getElementById('login-password').value;
             
-            // Logique de validation Admin (Tu pourras relier ça à Supabase Auth plus tard si besoin)
             if (email && pwd) {
+                document.body.style.cursor = 'wait';
+                // On s'assure d'avoir la dernière liste depuis Supabase avant d'afficher
+                await loadCabinetsConfig();
+                document.body.style.cursor = 'default';
+
                 document.getElementById('ecran-login').classList.add('hidden');
                 document.getElementById('ecran-dashboard').classList.remove('hidden');
                 renderCabinetsDashboard();
@@ -1554,7 +1568,7 @@
         function deconnecterAdmin() {
             document.getElementById('ecran-dashboard').classList.add('hidden');
             document.getElementById('ecran-login').classList.remove('hidden');
-            document.getElementById('login-password').value = ''; // On vide le mot de passe
+            document.getElementById('login-password').value = '';
         }
 
         // 3. Affichage du Dashboard des Cabinets
@@ -1565,29 +1579,42 @@
             cabinetsConfig.forEach(cab => {
                 container.innerHTML += `
                     <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200 hover:shadow-md hover:border-teal-400 transition cursor-pointer flex flex-col items-center justify-center text-center transform hover:-translate-y-1" 
-                         onclick="ouvrirModalCode('${cab.id}', '${cab.name.replace(/'/g, "\\'")}')">
+                         onclick="ouvrirModalCode('${cab.id}', '${cab.nom.replace(/'/g, "\\'")}')">
                         <div class="text-4xl mb-3">🏥</div>
-                        <h3 class="font-bold text-gray-800 text-lg">${cab.name}</h3>
+                        <h3 class="font-bold text-gray-800 text-lg">${cab.nom}</h3>
                     </div>
                 `;
             });
         }
 
-        // 4. Création d'un nouveau cabinet
-        function creerCabinet() {
-            const nom = document.getElementById('nouveau-cabinet-nom').value.trim();
-            const code = document.getElementById('nouveau-cabinet-code').value.trim();
+        // 4. Création d'un nouveau cabinet dans SUPABASE
+        async function creerCabinet() {
+            const nomSaisi = document.getElementById('nouveau-cabinet-nom').value.trim();
+            const codeSaisi = document.getElementById('nouveau-cabinet-code').value.trim();
             
-            if (nom && code) {
-                const newId = 'CAB_' + Date.now();
-                cabinetsConfig.push({ id: newId, name: nom, code: code });
-                localStorage.setItem('saved_cabinets_v3_secure', JSON.stringify(cabinetsConfig));
+            if (nomSaisi && codeSaisi) {
+                // On prépare l'objet avec tes noms de colonnes (Supabase générera l'UUID pour l'ID)
+                const newCab = { nom: nomSaisi, code_acces: codeSaisi };
                 
-                document.getElementById('nouveau-cabinet-nom').value = '';
-                document.getElementById('nouveau-cabinet-code').value = '';
-                
-                loadCabinetsConfig(); // Met à jour les menus déroulants
-                renderCabinetsDashboard(); // Rafraîchit les cartes
+                document.body.style.cursor = 'wait';
+                // On insère et on utilise .select() pour récupérer l'ID (UUID) généré par Supabase
+                const { data, error } = await supabaseClient.from('cabinets').insert([newCab]).select();
+                document.body.style.cursor = 'default';
+
+                if (error) {
+                    alert("Erreur lors de la création dans Supabase : " + error.message);
+                } else if (data && data.length > 0) {
+                    cabinetsConfig.push(data[0]); // On ajoute le cabinet avec son vrai UUID à notre liste
+                    
+                    document.getElementById('nouveau-cabinet-nom').value = '';
+                    document.getElementById('nouveau-cabinet-code').value = '';
+                    
+                    const headerSelect = document.getElementById('globalCabinetFilter');
+                    if (headerSelect) {
+                        headerSelect.innerHTML = cabinetsConfig.map(cab => `<option value="${cab.id}">${cab.nom}</option>`).join('');
+                    }
+                    renderCabinetsDashboard();
+                }
             } else {
                 alert("Veuillez saisir un nom et un code d'accès pour créer le cabinet.");
             }
@@ -1611,8 +1638,8 @@
             const codeSaisi = document.getElementById('saisie-code-acces').value;
             const cab = cabinetsConfig.find(c => c.id === selectedCabinetForLogin);
             
-            if (cab && cab.code === codeSaisi) {
-                // Succès : On ferme les menus et on lance l'application
+            // On vérifie avec la colonne code_acces
+            if (cab && cab.code_acces === codeSaisi) {
                 fermerModalCode();
                 document.getElementById('ecran-dashboard').classList.add('hidden');
                 document.getElementById('ecran-travail').classList.remove('hidden');
@@ -1620,7 +1647,7 @@
                 currentCabinet = cab.id;
                 document.getElementById('globalCabinetFilter').value = currentCabinet;
                 
-                loadDataForCabinet(); // Charge les données FSE/Noemie spécifiques
+                loadDataForCabinet(); 
             } else {
                 alert("❌ Code d'accès incorrect pour ce cabinet !");
                 document.getElementById('saisie-code-acces').value = '';
@@ -1628,7 +1655,7 @@
             }
         }
 
-        // Ajout du support de la touche "Entrée" pour valider le code
+        // Raccourcis clavier
         document.getElementById('saisie-code-acces').addEventListener('keypress', function (e) {
             if (e.key === 'Enter') validerCode();
         });
@@ -1641,11 +1668,10 @@
             document.getElementById('ecran-travail').classList.add('hidden');
             document.getElementById('ecran-dashboard').classList.remove('hidden');
             currentCabinet = null;
-            // Optionnel : on pourrait vider fseList et noemieList ici pour des raisons de sécurité mémoire
         }
 
         // ==========================================
-        // DÉMARRAGE INITIAL (MODIFIÉ POUR LA V3)
+        // DÉMARRAGE INITIAL
         // ==========================================
         window.addEventListener('DOMContentLoaded', () => {
             const currentMonthStr = String(new Date().getMonth() + 1).padStart(2, '0');
@@ -1653,10 +1679,9 @@
             document.getElementById('fseDate').valueAsDate = new Date();
             document.getElementById('n_date').valueAsDate = new Date();
             
-            // Chargement de la liste des cabinets dès l'ouverture
+            // On charge les cabinets depuis Supabase en arrière-plan
             loadCabinetsConfig();
             
-            // Écouteur sur le changement de cabinet RAPIDE depuis la barre de navigation
             const cabFilter = document.getElementById('globalCabinetFilter');
             if (cabFilter) {
                 cabFilter.addEventListener('change', (e) => {
