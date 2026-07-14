@@ -27,294 +27,775 @@
     <!-- ========================================== -->
     <!-- ÉCRAN DE CONNEXION & SÉLECTION DE CABINET -->
     <!-- ========================================== -->
-    <div id="loginScreen" class="fixed inset-0 z-[100] bg-gray-50 flex flex-col items-center justify-center p-4">
-        <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md text-center border border-gray-100">
-            <div class="text-6xl mb-4">🩺</div>
-            <h1 class="text-2xl font-black text-teal-800 mb-2">Suivi FSE & DRE</h1>
-            <p class="text-sm text-gray-500 mb-8">Veuillez sélectionner votre cabinet pour vous connecter</p>
+    <div id="ecran-login" class="ecran min-h-screen flex items-center justify-center bg-gray-100 z-[100] fixed inset-0">
+        <div class="bg-white p-8 rounded-xl shadow-xl max-w-sm w-full text-center">
+            <h2 class="text-2xl font-bold mb-6 text-teal-700">Connexion Administrateur</h2>
+            <input type="email" id="login-email" placeholder="Email principal" class="w-full p-3 mb-4 border rounded bg-gray-50 focus:ring-2 focus:ring-teal-500 outline-none">
+            <input type="password" id="login-password" placeholder="Mot de passe" class="w-full p-3 mb-6 border rounded bg-gray-50 focus:ring-2 focus:ring-teal-500 outline-none">
+            <button onclick="seConnecter()" class="w-full bg-teal-600 text-white font-bold py-3 rounded hover:bg-teal-700 transition shadow">Se connecter</button>
+        </div>
+    </div>
 
-            <div class="space-y-4">
-                <div class="text-left">
-                    <label class="block text-xs font-bold text-gray-700 uppercase mb-2">Choisir un cabinet</label>
-                    <select id="loginCabinetSelect" class="w-full border border-gray-300 rounded-lg p-3 text-gray-800 focus:ring-2 focus:ring-teal-500 shadow-sm font-bold text-lg">
-                        <!-- Rempli dynamiquement -->
-                    </select>
+    <div id="ecran-dashboard" class="ecran min-h-screen bg-gray-50 z-[90] fixed inset-0 overflow-y-auto hidden">
+        <div class="max-w-4xl mx-auto p-6 pt-12">
+            <div class="flex justify-between items-center bg-white p-5 rounded-xl shadow-sm mb-8 border border-gray-200">
+                <h2 class="text-2xl font-black text-gray-800">Mes Cabinets</h2>
+                <button onclick="deconnecterAdmin()" class="bg-rose-600 text-white px-5 py-2 rounded-lg font-bold hover:bg-rose-700 transition shadow-sm">Déconnexion</button>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12" id="liste-cabinets">
                 </div>
 
-                <button onclick="loginToCabinet()" class="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 px-4 rounded-lg shadow-md transition text-lg mt-4 focus:ring-4 focus:ring-teal-300 outline-none">
-                    Accéder au tableau de bord
-                </button>
-            </div>
-
-            <div class="mt-8 pt-6 border-t border-gray-100">
-                <button onclick="openManageCabinetsModal()" class="text-sm text-indigo-600 hover:text-indigo-800 font-bold hover:underline transition">
-                    ⚙️ Gérer les cabinets (Ajouter / Supprimer)
-                </button>
+            <div class="bg-white p-6 rounded-xl shadow-sm max-w-md mx-auto text-center border-t-4 border-teal-500">
+                <h3 class="font-bold text-gray-700 mb-4 text-lg">Ajouter un nouveau cabinet</h3>
+                <input type="text" id="nouveau-cabinet-nom" placeholder="Nom du cabinet (ex: Cabinet Centre)" class="w-full p-3 mb-3 border rounded focus:ring-2 focus:ring-teal-500 outline-none">
+                <input type="password" id="nouveau-cabinet-code" placeholder="Code secret (ex: 1234)" class="w-full p-3 mb-4 border rounded focus:ring-2 focus:ring-teal-500 outline-none">
+                <button onclick="creerCabinet()" class="w-full bg-teal-600 text-white font-bold py-3 rounded hover:bg-teal-700 transition shadow">Créer le cabinet</button>
             </div>
         </div>
     </div>
 
-    <!-- Modale de Gestion des Cabinets -->
-    <div id="manageCabinetsModal" class="hidden fixed inset-0 z-[110] bg-gray-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-        <div class="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col">
-            <div class="bg-indigo-600 p-4 flex justify-between items-center text-white">
-                <h3 class="font-bold text-lg">⚙️ Gérer les Cabinets</h3>
-                <button onclick="closeManageCabinetsModal()" class="text-white hover:text-indigo-200 text-2xl leading-none outline-none">&times;</button>
-            </div>
-            <div class="p-5 space-y-4">
-                <div id="cabinetsListContainer" class="space-y-2 mb-4 max-h-60 overflow-y-auto">
-                    <!-- Rempli dynamiquement -->
-                </div>
-                <div class="flex gap-2">
-                    <input type="text" id="newCabinetName" placeholder="Nom du nouveau cabinet..." class="flex-1 border border-gray-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-indigo-500 shadow-sm">
-                    <button onclick="addNewCabinet()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition shadow-sm text-sm">Ajouter</button>
-                </div>
-            </div>
+    <div id="modal-code" class="hidden fixed inset-0 z-[100] bg-gray-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-white p-6 rounded-xl shadow-2xl max-w-sm w-full text-center">
+            <h3 id="nom-cabinet-selectionne" class="text-xl font-black text-teal-700 mb-4">Cabinet</h3>
+            <p class="text-sm text-gray-500 mb-4">Veuillez saisir le code d'accès de ce cabinet.</p>
+            <input type="password" id="saisie-code-acces" placeholder="Code secret" class="w-full p-3 mb-4 border rounded text-center text-2xl tracking-widest focus:ring-2 focus:ring-teal-500 outline-none">
+            <button onclick="validerCode()" class="w-full bg-teal-600 text-white font-bold py-3 rounded hover:bg-teal-700 mb-3 shadow transition">Déverrouiller</button>
+            <button onclick="fermerModalCode()" class="w-full bg-gray-100 text-gray-700 font-bold py-2 rounded hover:bg-gray-200 transition">Annuler</button>
         </div>
     </div>
 
-    <header id="mainHeader" class="hidden bg-teal-700 text-white shadow-md sticky top-0 z-40">
-        <div class="max-w-[1400px] mx-auto px-4 py-3 flex flex-wrap justify-between items-center gap-3">
-            <h1 class="text-xl font-bold flex items-center gap-4">
-                <span>🩺 Suivi FSE & DRE</span>
-                <div class="flex bg-teal-800 rounded-lg p-1 items-center overflow-x-auto">
-                    <button onclick="switchPage('dashboardPage')" id="navDashboard" class="px-3 py-1.5 text-sm font-semibold rounded bg-teal-600 text-white transition whitespace-nowrap">Factures</button>
-                    <button onclick="switchPage('noemiePage')" id="navNoemie" class="px-3 py-1.5 text-sm font-semibold rounded text-teal-200 hover:text-white hover:bg-teal-600/50 transition whitespace-nowrap">Retours NOEMIE</button>
-                    <button onclick="switchPage('retrosPage')" id="navRetros" class="px-3 py-1.5 text-sm font-semibold rounded text-teal-200 hover:text-white hover:bg-teal-600/50 transition whitespace-nowrap">Rétros</button>
-                    <button onclick="openImpayesModal()" class="px-3 py-1.5 text-sm font-semibold rounded text-rose-200 hover:text-white hover:bg-rose-600/50 transition bg-rose-700/50 ml-1 whitespace-nowrap">⚠️ Impayés</button>
-                </div>
-            </h1>
-            <div class="flex flex-wrap items-center gap-2 md:gap-3">
-                <button onclick="exportData()" title="Sauvegarder les données (.json)" class="bg-indigo-700 hover:bg-indigo-600 border border-indigo-500 text-white p-1.5 rounded transition shadow flex items-center justify-center">
-                    💾
-                </button>
-                <label title="Restaurer les données (.json)" class="bg-indigo-700 hover:bg-indigo-600 border border-indigo-500 text-white p-1.5 rounded transition shadow flex items-center justify-center cursor-pointer">
-                    📂<input type="file" id="fileInputRestore" accept=".json" class="hidden" onchange="importData(event)">
-                </label>
+    <div id="ecran-travail" class="hidden relative">
+        
+        <button onclick="retourDashboard()" class="fixed bottom-6 right-6 z-[60] bg-gray-800 text-white px-5 py-3 rounded-full shadow-xl font-bold hover:bg-gray-700 transition border-2 border-white flex items-center gap-2">
+            <span>⬅</span> Changer de cabinet
+        </button>
 
-                <button onclick="forceSyncNoemieToFse()" class="bg-indigo-100 hover:bg-indigo-200 text-indigo-700 font-bold py-1 px-3 rounded text-sm shadow flex items-center gap-2">
-                     🔄 Resynchroniser NOEMIE -> FSE
-                </button>
-                
-                <div class="w-px h-6 bg-teal-500 mx-1"></div> 
+        <header class="bg-teal-700 text-white shadow-md sticky top-0 z-40">
+            <div class="max-w-[1400px] mx-auto px-4 py-3 flex flex-wrap justify-between items-center gap-3">
+                <h1 class="text-xl font-bold flex items-center gap-4">
+                    <span>🩺 Suivi FSE & DRE</span>
+                    <div class="flex bg-teal-800 rounded-lg p-1 items-center overflow-x-auto">
+                        <button onclick="switchPage('dashboardPage')" id="navDashboard" class="px-3 py-1.5 text-sm font-semibold rounded bg-teal-600 text-white transition whitespace-nowrap">Factures</button>
+                        <button onclick="switchPage('noemiePage')" id="navNoemie" class="px-3 py-1.5 text-sm font-semibold rounded text-teal-200 hover:text-white hover:bg-teal-600/50 transition whitespace-nowrap">Retours NOEMIE</button>
+                        <button onclick="switchPage('retrosPage')" id="navRetros" class="hidden px-3 py-1.5 text-sm font-semibold rounded text-teal-200 hover:text-white hover:bg-teal-600/50 transition whitespace-nowrap">Rétros</button>
+                        <button onclick="openImpayesModal()" class="px-3 py-1.5 text-sm font-semibold rounded text-rose-200 hover:text-white hover:bg-rose-600/50 transition bg-rose-700/50 ml-1 whitespace-nowrap">⚠️ Impayés</button>
+                    </div>
+                </h1>
+                <div class="flex flex-wrap items-center gap-2 md:gap-3">
+                    <button onclick="exportData()" title="Sauvegarder les données (.json)" class="bg-indigo-700 hover:bg-indigo-600 border border-indigo-500 text-white p-1.5 rounded transition shadow flex items-center justify-center">💾</button>
+                    <label title="Restaurer les données (.json)" class="bg-indigo-700 hover:bg-indigo-600 border border-indigo-500 text-white p-1.5 rounded transition shadow flex items-center justify-center cursor-pointer">
+                        📂<input type="file" id="fileInputRestore" accept=".json" class="hidden" onchange="importData(event)">
+                    </label>
 
-                <!-- NOUVEAU : Sélecteur de Cabinet (V3) -->
-                <select id="globalCabinetFilter" class="bg-indigo-800 text-white border border-indigo-600 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 font-bold shadow-inner">
-                    <option value="CABINET_1">🏥 Cabinet Principal</option>
-                    <option value="CABINET_2">🏥 Cabinet Secondaire</option>
-                </select>
+                    <button onclick="forceSyncNoemieToFse()" class="bg-indigo-100 hover:bg-indigo-200 text-indigo-700 font-bold py-1 px-3 rounded text-sm shadow flex items-center gap-2">
+                         🔄 Resynchroniser NOEMIE -> FSE
+                    </button>
+                    
+                    <div class="w-px h-6 bg-teal-500 mx-1"></div> 
 
-                <select id="globalPraticienFilter" class="bg-teal-800 text-white border border-teal-600 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 font-semibold shadow-inner">
-                    <option value="ALL">👨‍⚕️ Tous les Praticiens</option>
-                </select>
-
-                <div class="flex items-center gap-1 bg-teal-800 border border-teal-600 rounded p-0.5">
-                    <select id="yearFilter" class="bg-teal-800 text-white rounded px-2 py-1 text-sm focus:outline-none font-semibold cursor-pointer">
-                        <option value="ALL">🗓️ Toutes années</option>
+                    <select id="globalPraticienFilter" class="bg-teal-800 text-white border border-teal-600 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 font-semibold shadow-inner">
+                        <option value="ALL">👨‍⚕️ Tous les Praticiens</option>
                     </select>
-                    <button onclick="addCustomYear()" title="Ajouter une année" class="text-teal-200 hover:text-white hover:bg-teal-700 px-2 py-1 rounded transition text-sm font-bold">+</button>
-                </div>
 
-                <select id="monthFilter" class="bg-teal-800 text-white border border-teal-600 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400">
-                    <option value="ALL">📅 Toute l'année</option>
-                    <option value="01">Janvier</option><option value="02">Février</option><option value="03">Mars</option>
-                    <option value="04">Avril</option><option value="05">Mai</option><option value="06">Juin</option>
-                    <option value="07">Juillet</option><option value="08">Août</option><option value="09">Septembre</option>
-                    <option value="10">Octobre</option><option value="11">Novembre</option><option value="12">Décembre</option>
-                </select>
+                    <div class="flex items-center gap-1 bg-teal-800 border border-teal-600 rounded p-0.5">
+                        <select id="yearFilter" class="bg-teal-800 text-white rounded px-2 py-1 text-sm focus:outline-none font-semibold cursor-pointer">
+                            <option value="ALL">🗓️ Toutes années</option>
+                        </select>
+                        <button onclick="addCustomYear()" title="Ajouter une année" class="text-teal-200 hover:text-white hover:bg-teal-700 px-2 py-1 rounded transition text-sm font-bold">+</button>
+                    </div>
 
-                <button onclick="openSettingsModal()" title="Gérer Praticiens" class="bg-teal-800 hover:bg-teal-600 text-white border border-teal-600 p-1.5 rounded transition shadow flex items-center justify-center">
-                    ⚙️
-                </button>
-                <button onclick="openRecapModal()" class="bg-indigo-600 hover:bg-indigo-500 text-sm font-semibold px-3 py-1.5 rounded transition shadow flex items-center gap-1 hidden md:flex">
-                    📊 Bilan
-                </button>
-                
-                <div id="actionButtons" class="flex gap-2">
-                    <button id="btnNewFse" onclick="openFseModal()" class="bg-teal-500 hover:bg-teal-400 text-sm font-semibold px-3 py-1.5 rounded transition shadow flex items-center gap-1">
-                        + Nouvelle FSE
-                    </button>
-                    <button id="btnNewNoemie" onclick="openNoemieModal()" class="hidden bg-emerald-500 hover:bg-emerald-400 text-sm font-semibold px-3 py-1.5 rounded transition shadow flex items-center gap-1">
-                        + Nouveau Retour
-                    </button>
-                    <button id="btnNewRetro" onclick="openRetroModal()" class="hidden bg-purple-500 hover:bg-purple-400 text-sm font-semibold px-3 py-1.5 rounded transition shadow flex items-center gap-1">
-                        + Nouvelle Rétro
-                    </button>
+                    <select id="monthFilter" class="bg-teal-800 text-white border border-teal-600 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400">
+                        <option value="ALL">📅 Toute l'année</option>
+                        <option value="01">Janvier</option><option value="02">Février</option><option value="03">Mars</option>
+                        <option value="04">Avril</option><option value="05">Mai</option><option value="06">Juin</option>
+                        <option value="07">Juillet</option><option value="08">Août</option><option value="09">Septembre</option>
+                        <option value="10">Octobre</option><option value="11">Novembre</option><option value="12">Décembre</option>
+                    </select>
+
+                    <button onclick="openSettingsModal()" title="Gérer Praticiens" class="bg-teal-800 hover:bg-teal-600 text-white border border-teal-600 p-1.5 rounded transition shadow flex items-center justify-center">⚙️</button>
+                    <button onclick="openRecapModal()" class="bg-indigo-600 hover:bg-indigo-500 text-sm font-semibold px-3 py-1.5 rounded transition shadow flex items-center gap-1 hidden md:flex">📊 Bilan</button>
+                    
+                    <div id="actionButtons" class="flex gap-2">
+                        <button id="btnNewFse" onclick="openFseModal()" class="bg-teal-500 hover:bg-teal-400 text-sm font-semibold px-3 py-1.5 rounded transition shadow flex items-center gap-1">+ Nouvelle FSE</button>
+                        <button id="btnNewNoemie" onclick="openNoemieModal()" class="hidden bg-emerald-500 hover:bg-emerald-400 text-sm font-semibold px-3 py-1.5 rounded transition shadow flex items-center gap-1">+ Nouveau Retour</button>
+                        <button id="btnNewRetro" onclick="openRetroModal()" class="hidden bg-purple-500 hover:bg-purple-400 text-sm font-semibold px-3 py-1.5 rounded transition shadow flex items-center gap-1">+ Nouvelle Rétro</button>
+                    </div>
                 </div>
             </div>
         </header>
 
-    <main id="mainApp" class="hidden max-w-[1400px] mx-auto px-4 pb-6 pt-2 space-y-4">
+        <main class="max-w-[1400px] mx-auto px-4 pb-6 pt-2 space-y-4">
 
-        <div id="dashboardPage" class="space-y-4 block">
-            <div class="sticky top-[60px] md:top-[64px] z-30 bg-gray-50/95 backdrop-blur-sm py-2 border-b border-gray-200">
-                <section class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div class="bg-white p-3 rounded-xl shadow-sm border border-gray-200 flex flex-col justify-between">
-                        <p class="text-[10px] md:text-xs text-gray-500 font-medium uppercase mb-1">Total Soins Attendu</p>
-                        <p id="kpiTotalSoins" class="text-lg md:text-xl font-black text-gray-900 leading-none">0,00 €</p>
-                        <div class="flex justify-between items-center mt-2 pt-2 border-t border-gray-100 text-[10px] font-bold">
-                            <span class="text-teal-700">RO: <span id="kpiSoinsRO" class="font-mono">0,00 €</span></span>
-                            <span class="text-indigo-700">RC: <span id="kpiSoinsRC" class="font-mono">0,00 €</span></span>
+            <div id="dashboardPage" class="space-y-4 block">
+                <div class="sticky top-[60px] md:top-[64px] z-30 bg-gray-50/95 backdrop-blur-sm py-2 border-b border-gray-200">
+                    <section class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div class="bg-white p-3 rounded-xl shadow-sm border border-gray-200 flex flex-col justify-between">
+                            <p class="text-[10px] md:text-xs text-gray-500 font-medium uppercase mb-1">Total Soins Attendu</p>
+                            <p id="kpiTotalSoins" class="text-lg md:text-xl font-black text-gray-900 leading-none">0,00 €</p>
+                            <div class="flex justify-between items-center mt-2 pt-2 border-t border-gray-100 text-[10px] font-bold">
+                                <span class="text-teal-700">RO: <span id="kpiSoinsRO" class="font-mono">0,00 €</span></span>
+                                <span class="text-indigo-700">RC: <span id="kpiSoinsRC" class="font-mono">0,00 €</span></span>
+                            </div>
                         </div>
-                    </div>
-                    <div class="bg-white p-3 rounded-xl shadow-sm border border-gray-200 flex flex-col justify-between">
-                        <p class="text-[10px] md:text-xs text-gray-500 font-medium uppercase mb-1">Total Perçu</p>
-                        <p id="kpiTotalPercu" class="text-lg md:text-xl font-black text-emerald-600 leading-none">0,00 €</p>
-                        <div class="flex justify-between items-center mt-2 pt-2 border-t border-gray-100 text-[10px] font-bold">
-                            <span class="text-emerald-700 opacity-80">RO: <span id="kpiPercuRO" class="font-mono">0,00 €</span></span>
-                            <span class="text-emerald-700 opacity-80">RC: <span id="kpiPercuRC" class="font-mono">0,00 €</span></span>
+                        <div class="bg-white p-3 rounded-xl shadow-sm border border-gray-200 flex flex-col justify-between">
+                            <p class="text-[10px] md:text-xs text-gray-500 font-medium uppercase mb-1">Total Perçu</p>
+                            <p id="kpiTotalPercu" class="text-lg md:text-xl font-black text-emerald-600 leading-none">0,00 €</p>
+                            <div class="flex justify-between items-center mt-2 pt-2 border-t border-gray-100 text-[10px] font-bold">
+                                <span class="text-emerald-700 opacity-80">RO: <span id="kpiPercuRO" class="font-mono">0,00 €</span></span>
+                                <span class="text-emerald-700 opacity-80">RC: <span id="kpiPercuRC" class="font-mono">0,00 €</span></span>
+                            </div>
                         </div>
-                    </div>
-                    <div class="bg-white p-3 rounded-xl shadow-sm border border-gray-200 flex flex-col justify-between">
-                        <p class="text-[10px] md:text-xs text-gray-500 font-medium uppercase mb-1">Reste à Recouvrer</p>
-                        <p id="kpiTotalDu" class="text-lg md:text-xl font-black text-rose-600 leading-none">0,00 €</p>
-                        <div class="flex justify-between items-center mt-2 pt-2 border-t border-gray-100 text-[10px] font-bold">
-                            <span class="text-rose-700 opacity-80">RO: <span id="kpiDuRO" class="font-mono">0,00 €</span></span>
-                            <span class="text-rose-700 opacity-80">RC: <span id="kpiDuRC" class="font-mono">0,00 €</span></span>
+                        <div class="bg-white p-3 rounded-xl shadow-sm border border-gray-200 flex flex-col justify-between">
+                            <p class="text-[10px] md:text-xs text-gray-500 font-medium uppercase mb-1">Reste à Recouvrer</p>
+                            <p id="kpiTotalDu" class="text-lg md:text-xl font-black text-rose-600 leading-none">0,00 €</p>
+                            <div class="flex justify-between items-center mt-2 pt-2 border-t border-gray-100 text-[10px] font-bold">
+                                <span class="text-rose-700 opacity-80">RO: <span id="kpiDuRO" class="font-mono">0,00 €</span></span>
+                                <span class="text-rose-700 opacity-80">RC: <span id="kpiDuRC" class="font-mono">0,00 €</span></span>
+                            </div>
                         </div>
+                        <div class="bg-white p-3 rounded-xl shadow-sm border border-gray-200 flex flex-col justify-center">
+                            <p class="text-[10px] md:text-xs text-gray-500 font-medium uppercase mb-1">Taux Recouvrement</p>
+                            <p id="kpiTaux" class="text-lg md:text-xl font-black text-teal-600 leading-none">0 %</p>
+                        </div>
+                    </section>
+                </div>
+
+                <div class="flex flex-wrap items-center gap-4 text-[10px] uppercase font-bold text-gray-500 px-2">
+                    <div class="flex items-center gap-1.5"><span class="w-3 h-3 bg-emerald-100 border border-emerald-300 rounded-sm"></span> Solde à 0€</div>
+                    <div class="flex items-center gap-1.5"><span class="w-3 h-3 bg-orange-100 border border-orange-300 rounded-sm"></span> Paiement partiel</div>
+                    <div class="flex items-center gap-1.5"><span class="w-3 h-3 bg-red-100 border border-red-300 rounded-sm"></span> Rejet</div>
+                    <div class="flex items-center gap-1.5"><span class="w-3 h-3 bg-white border border-gray-300 rounded-sm"></span> En attente</div>
+                    <div class="flex items-center gap-1.5"><span class="w-3 h-3 bg-gray-100 border border-gray-300 rounded-sm"></span> Défacturée</div>
+                </div>
+
+                <section class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden relative">
+                    <div class="w-full max-h-[65vh] overflow-y-auto table-scroll relative">
+                        <table class="w-full text-left border-collapse table-auto text-xs min-w-[1100px]">
+                            <thead class="bg-gray-100 text-gray-600 uppercase font-semibold sticky top-0 z-20 shadow-[0_1px_2px_rgba(0,0,0,0.1)]">
+                                <tr>
+                                    <th class="p-2 w-20 cursor-pointer hover:bg-gray-200 transition bg-gray-100" onclick="setSort('date')">Date ↕</th>
+                                    <th class="p-2 w-24 cursor-pointer hover:bg-gray-200 transition bg-gray-100" onclick="setSort('praticien')">Praticien ↕</th>
+                                    <th class="p-2 w-28 cursor-pointer hover:bg-gray-200 transition bg-gray-100" onclick="setSort('lot')">Lot / Caisse ↕</th>
+                                    <th class="p-2 w-24 bg-gray-100">N° FSE / Opt</th>
+                                    <th class="p-2 bg-gray-100">Patient</th>
+                                    <th class="p-2 w-28 bg-gray-100">Mutuelle / DRE</th>
+                                    <th class="p-2 text-right w-16 bg-gray-100">Mt RO</th>
+                                    <th class="p-2 text-center w-14 bg-gray-100">OK RO</th>
+                                    <th class="p-2 text-center w-24 bg-gray-100">Vir. RO</th>
+                                    <th class="p-2 text-right w-16 bg-gray-100">Mt RC</th>
+                                    <th class="p-2 text-center w-14 bg-gray-100">OK RC</th>
+                                    <th class="p-2 text-center w-24 bg-gray-100">Vir. RC</th>
+                                    <th class="p-2 text-right w-16 bg-gray-100">Total</th>
+                                    <th class="p-2 text-right w-16 bg-gray-100">Dû</th>
+                                    <th class="p-2 text-center w-32 bg-gray-100">Actions</th>
+                                </tr>
+                                <tr class="bg-gray-50 border-b border-gray-200">
+                                    <th class="p-1"><input type="text" id="searchDate" placeholder="Date..." class="w-full p-1 border border-gray-300 rounded bg-white font-normal focus:outline-none focus:ring-1 focus:ring-teal-500 text-[10px]"></th>
+                                    <th class="p-1"><input type="text" id="searchPraticien" placeholder="Prat..." class="w-full p-1 border border-gray-300 rounded bg-white font-normal focus:outline-none focus:ring-1 focus:ring-teal-500 text-[10px]"></th>
+                                    <th class="p-1"><input type="text" id="searchLot" placeholder="Lot/Caisse..." class="w-full p-1 border border-gray-300 rounded bg-white font-normal focus:outline-none focus:ring-1 focus:ring-teal-500 text-[10px]"></th>
+                                    <th class="p-1"><input type="text" id="searchNumFSE" placeholder="N° FSE..." class="w-full p-1 border border-gray-300 rounded bg-white font-normal focus:outline-none focus:ring-1 focus:ring-teal-500 text-[10px]"></th>
+                                    <th class="p-1"><input type="text" id="searchPatient" placeholder="Nom Patient..." class="w-full p-1 border border-gray-300 rounded bg-white font-normal focus:outline-none focus:ring-1 focus:ring-teal-500 text-[10px]"></th>
+                                    <th class="p-1"><input type="text" id="searchMutuelle" list="mutuellesList" placeholder="Mut/DRE..." class="w-full p-1 border border-gray-300 rounded bg-white font-normal focus:outline-none focus:ring-1 focus:ring-teal-500 text-[10px]"></th>
+                                    <th class="p-1"></th>
+                                    <th class="p-1"><select id="searchCheckRO" class="w-full p-1 border border-gray-300 rounded bg-white font-normal text-[10px] focus:outline-none focus:ring-1 focus:ring-teal-500"><option value="ALL">Tous</option><option value="VAL">OK</option><option value="ATT">Att.</option></select></th>
+                                    <th class="p-1"></th>
+                                    <th class="p-1"></th>
+                                    <th class="p-1"><select id="searchCheckRC" class="w-full p-1 border border-gray-300 rounded bg-white font-normal text-[10px] focus:outline-none focus:ring-1 focus:ring-teal-500"><option value="ALL">Tous</option><option value="VAL">OK</option><option value="ATT">Att.</option></select></th>
+                                    <th class="p-1"></th>
+                                    <th class="p-1"></th>
+                                    <th class="p-1"></th>
+                                    <th class="p-1"></th>
+                                </tr>
+                            </thead>
+                            <tbody id="fseTableBody" class="divide-y divide-gray-200 text-[11px]">
+                                </tbody>
+                        </table>
                     </div>
-                    <div class="bg-white p-3 rounded-xl shadow-sm border border-gray-200 flex flex-col justify-center">
-                        <p class="text-[10px] md:text-xs text-gray-500 font-medium uppercase mb-1">Taux Recouvrement</p>
-                        <p id="kpiTaux" class="text-lg md:text-xl font-black text-teal-600 leading-none">0 %</p>
+                    <div id="emptyState" class="hidden text-center py-8 text-gray-400 w-full bg-white relative z-0">
+                        Aucune facture ne correspond à vos critères de recherche.
                     </div>
                 </section>
             </div>
 
-            <div class="flex flex-wrap items-center gap-4 text-[10px] uppercase font-bold text-gray-500 px-2">
-                <div class="flex items-center gap-1.5"><span class="w-3 h-3 bg-emerald-100 border border-emerald-300 rounded-sm"></span> Solde à 0€</div>
-                <div class="flex items-center gap-1.5"><span class="w-3 h-3 bg-orange-100 border border-orange-300 rounded-sm"></span> Paiement partiel</div>
-                <div class="flex items-center gap-1.5"><span class="w-3 h-3 bg-red-100 border border-red-300 rounded-sm"></span> Rejet</div>
-                <div class="flex items-center gap-1.5"><span class="w-3 h-3 bg-white border border-gray-300 rounded-sm"></span> En attente</div>
-                <div class="flex items-center gap-1.5"><span class="w-3 h-3 bg-gray-100 border border-gray-300 rounded-sm"></span> Défacturée</div>
+            <div id="noemiePage" class="page-hidden space-y-4">
+                <section class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden relative">
+                    <div class="p-2 border-b border-gray-200 flex justify-between items-center bg-gray-50 z-30 relative">
+                        <h3 class="text-sm font-bold text-gray-700">📜 Historique des Retours Groupés</h3>
+                        <div class="flex items-center gap-3">
+                            <input type="file" id="fileInputNoemie" accept=".csv" class="hidden" onchange="handleImportNoemie(event)">
+                            <button onclick="document.getElementById('fileInputNoemie').click()" class="text-[11px] font-bold text-teal-600 hover:text-teal-800 border border-teal-200 hover:bg-teal-50 py-1 px-2 rounded shadow-sm flex items-center gap-1 transition">
+                                📥 Import CSV
+                            </button>
+                        </div>
+                    </div>
+                    <div class="w-full max-h-[70vh] overflow-y-auto table-scroll relative">
+                        <table class="w-full text-left border-collapse table-auto text-xs min-w-[900px]">
+                           <thead class="bg-teal-200 text-teal-900 text-xs uppercase text-left sticky top-0 z-10">
+                                <tr>
+                                    <th class="p-2 font-bold cursor-pointer hover:bg-teal-300 transition select-none w-32" onclick="sortNoemie('date')" title="Trier par date">Date / Origine <span id="sortIcon_date" class="text-teal-900 ml-1">▼</span></th>
+                                    <th class="p-2 font-bold w-24">Praticien</th>
+                                    <th class="p-2 font-bold cursor-pointer hover:bg-teal-300 transition select-none" onclick="sortNoemie('caisse')" title="Trier par organisme">Caisse/Mut <span id="sortIcon_caisse" class="text-teal-600/40 ml-1">↕</span></th>
+                                    <th class="p-2 font-bold cursor-pointer hover:bg-teal-300 transition select-none text-center w-24" onclick="sortNoemie('nbFSE')" title="Trier par nombre de factures">Nb FSE <span id="sortIcon_nbFSE" class="text-teal-600/40 ml-1">↕</span></th>
+                                    <th class="p-2 font-bold text-right w-24">Montant</th>
+                                    <th class="p-2 font-bold text-center w-28">Encaissé le</th>
+                                    <th class="p-2 font-bold w-32">N° Relevé</th>
+                                    <th class="p-2 font-bold">Info / Com.</th>
+                                    <th class="p-2 font-bold text-center w-20">Actions</th>
+                                </tr>
+                                <tr class="bg-teal-100/80">
+                                    <td class="p-1"><input type="text" id="sNoemieDate" oninput="renderNoemieTable()" class="w-full text-[10px] p-1.5 border border-teal-300 rounded shadow-inner focus:ring-teal-500 font-normal outline-none" placeholder="Filtrer Date..."></td>
+                                    <td class="p-1"><input type="text" id="sNoemiePraticien" oninput="renderNoemieTable()" class="w-full text-[10px] p-1.5 border border-teal-300 rounded shadow-inner focus:ring-teal-500 font-normal outline-none" placeholder="Praticien..."></td>
+                                    <td class="p-1">
+                                        <select id="sNoemieCaisse" onchange="renderNoemieTable()" class="w-full text-[10px] p-1.5 border border-teal-300 rounded shadow-inner bg-white focus:ring-teal-500 font-normal outline-none">
+                                            <option value="">Toutes Caisses</option>
+                                        </select>
+                                    </td>
+                                    <td class="p-1"><input type="text" id="sNoemieFSE" oninput="renderNoemieTable()" class="w-full text-[10px] p-1.5 border border-teal-300 rounded shadow-inner text-center focus:ring-teal-500 font-normal outline-none" placeholder="N° FSE..."></td>
+                                    <td class="p-1"><input type="text" id="sNoemieMontant" oninput="renderNoemieTable()" class="w-full text-[10px] p-1.5 border border-teal-300 rounded shadow-inner text-right focus:ring-teal-500 font-normal outline-none" placeholder="Montant..."></td>
+                                    <td class="p-1"><input type="text" id="sNoemieEncaisse" oninput="renderNoemieTable()" class="w-full text-[10px] p-1.5 border border-teal-300 rounded shadow-inner text-center focus:ring-teal-500 font-normal outline-none" placeholder="Encaissement..."></td>
+                                    <td class="p-1"><input type="text" id="sNoemieReleve" oninput="renderNoemieTable()" class="w-full text-[10px] p-1.5 border border-teal-300 rounded shadow-inner focus:ring-teal-500 font-normal outline-none" placeholder="Relevé..."></td>
+                                    <td class="p-1"><input type="text" id="sNoemieInfo" oninput="renderNoemieTable()" class="w-full text-[10px] p-1.5 border border-teal-300 rounded shadow-inner focus:ring-teal-500 font-normal outline-none" placeholder="Infos..."></td>
+                                    <td class="p-1 text-center"><button onclick="clearNoemieFilters()" class="text-[10px] font-bold bg-white border border-teal-400 text-teal-700 px-2 py-1 rounded hover:bg-teal-50 transition shadow-sm w-full outline-none">Effacer</button></td>
+                                </tr>
+                            </thead>
+                            <tbody id="noemieTableBody" class="text-[12px]">
+                                </tbody>
+                        </table>
+                    </div>
+                </section>
             </div>
 
-            <section class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden relative">
-                <div class="w-full max-h-[65vh] overflow-y-auto table-scroll relative">
-                    <table class="w-full text-left border-collapse table-auto text-xs min-w-[1100px]">
-                        <thead class="bg-gray-100 text-gray-600 uppercase font-semibold sticky top-0 z-20 shadow-[0_1px_2px_rgba(0,0,0,0.1)]">
-                            <tr>
-                                <th class="p-2 w-20 cursor-pointer hover:bg-gray-200 transition bg-gray-100" onclick="setSort('date')">Date ↕</th>
-                                <th class="p-2 w-24 cursor-pointer hover:bg-gray-200 transition bg-gray-100" onclick="setSort('praticien')">Praticien ↕</th>
-                                <th class="p-2 w-28 cursor-pointer hover:bg-gray-200 transition bg-gray-100" onclick="setSort('lot')">Lot / Caisse ↕</th>
-                                <th class="p-2 w-24 bg-gray-100">N° FSE / Opt</th>
-                                <th class="p-2 bg-gray-100">Patient</th>
-                                <th class="p-2 w-28 bg-gray-100">Mutuelle / DRE</th>
-                                <th class="p-2 text-right w-16 bg-gray-100">Mt RO</th>
-                                <th class="p-2 text-center w-14 bg-gray-100">OK RO</th>
-                                <th class="p-2 text-center w-24 bg-gray-100">Vir. RO</th>
-                                <th class="p-2 text-right w-16 bg-gray-100">Mt RC</th>
-                                <th class="p-2 text-center w-14 bg-gray-100">OK RC</th>
-                                <th class="p-2 text-center w-24 bg-gray-100">Vir. RC</th>
-                                <th class="p-2 text-right w-16 bg-gray-100">Total</th>
-                                <th class="p-2 text-right w-16 bg-gray-100">Dû</th>
-                                <th class="p-2 text-center w-32 bg-gray-100">Actions</th>
-                            </tr>
-                            <tr class="bg-gray-50 border-b border-gray-200">
-                                <th class="p-1"><input type="text" id="searchDate" placeholder="Date..." class="w-full p-1 border border-gray-300 rounded bg-white font-normal focus:outline-none focus:ring-1 focus:ring-teal-500 text-[10px]"></th>
-                                <th class="p-1"><input type="text" id="searchPraticien" placeholder="Prat..." class="w-full p-1 border border-gray-300 rounded bg-white font-normal focus:outline-none focus:ring-1 focus:ring-teal-500 text-[10px]"></th>
-                                <th class="p-1"><input type="text" id="searchLot" placeholder="Lot/Caisse..." class="w-full p-1 border border-gray-300 rounded bg-white font-normal focus:outline-none focus:ring-1 focus:ring-teal-500 text-[10px]"></th>
-                                <th class="p-1"><input type="text" id="searchNumFSE" placeholder="N° FSE..." class="w-full p-1 border border-gray-300 rounded bg-white font-normal focus:outline-none focus:ring-1 focus:ring-teal-500 text-[10px]"></th>
-                                <th class="p-1"><input type="text" id="searchPatient" placeholder="Nom Patient..." class="w-full p-1 border border-gray-300 rounded bg-white font-normal focus:outline-none focus:ring-1 focus:ring-teal-500 text-[10px]"></th>
-                                <th class="p-1"><input type="text" id="searchMutuelle" list="mutuellesList" placeholder="Mut/DRE..." class="w-full p-1 border border-gray-300 rounded bg-white font-normal focus:outline-none focus:ring-1 focus:ring-teal-500 text-[10px]"></th>
-                                <th class="p-1"></th>
-                                <th class="p-1"><select id="searchCheckRO" class="w-full p-1 border border-gray-300 rounded bg-white font-normal text-[10px] focus:outline-none focus:ring-1 focus:ring-teal-500"><option value="ALL">Tous</option><option value="VAL">OK</option><option value="ATT">Att.</option></select></th>
-                                <th class="p-1"></th>
-                                <th class="p-1"></th>
-                                <th class="p-1"><select id="searchCheckRC" class="w-full p-1 border border-gray-300 rounded bg-white font-normal text-[10px] focus:outline-none focus:ring-1 focus:ring-teal-500"><option value="ALL">Tous</option><option value="VAL">OK</option><option value="ATT">Att.</option></select></th>
-                                <th class="p-1"></th>
-                                <th class="p-1"></th>
-                                <th class="p-1"></th>
-                                <th class="p-1"></th>
-                            </tr>
-                        </thead>
-                        <tbody id="fseTableBody" class="divide-y divide-gray-200 text-[11px]">
-                        </tbody>
-                    </table>
-                </div>
-                <div id="emptyState" class="hidden text-center py-8 text-gray-400 w-full bg-white relative z-0">
-                    Aucune facture ne correspond à vos critères de recherche.
-                </div>
-            </section>
-        </div>
-
-        <div id="noemiePage" class="page-hidden space-y-4">
-            <section class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden relative">
-                <div class="p-2 border-b border-gray-200 flex justify-between items-center bg-gray-50 z-30 relative">
-                    <h3 class="text-sm font-bold text-gray-700">📜 Historique des Retours Groupés</h3>
-                </div>
-                <div class="w-full max-h-[70vh] overflow-y-auto table-scroll relative">
-                    <table class="w-full text-left border-collapse table-auto text-xs min-w-[900px]">
-                       <thead class="bg-teal-200 text-teal-900 text-xs uppercase text-left sticky top-0 z-10">
-                            <tr>
-                                <th class="p-2 font-bold cursor-pointer hover:bg-teal-300 transition select-none w-32" onclick="sortNoemie('date')" title="Trier par date">Date / Origine <span id="sortIcon_date" class="text-teal-900 ml-1">▼</span></th>
-                                <th class="p-2 font-bold w-24">Praticien</th>
-                                <th class="p-2 font-bold cursor-pointer hover:bg-teal-300 transition select-none" onclick="sortNoemie('caisse')" title="Trier par organisme">Caisse/Mut <span id="sortIcon_caisse" class="text-teal-600/40 ml-1">↕</span></th>
-                                <th class="p-2 font-bold cursor-pointer hover:bg-teal-300 transition select-none text-center w-24" onclick="sortNoemie('nbFSE')" title="Trier par nombre de factures">Nb FSE <span id="sortIcon_nbFSE" class="text-teal-600/40 ml-1">↕</span></th>
-                                <th class="p-2 font-bold text-right w-24">Montant</th>
-                                <th class="p-2 font-bold text-center w-28">Encaissé le</th>
-                                <th class="p-2 font-bold w-32">N° Relevé</th>
-                                <th class="p-2 font-bold">Info / Com.</th>
-                                <th class="p-2 font-bold text-center w-20">Actions</th>
-                            </tr>
-                            <tr class="bg-teal-100/80">
-                                <td class="p-1"><input type="text" id="sNoemieDate" oninput="renderNoemieTable()" class="w-full text-[10px] p-1.5 border border-teal-300 rounded shadow-inner focus:ring-teal-500 font-normal outline-none" placeholder="Filtrer Date..."></td>
-                                <td class="p-1"><input type="text" id="sNoemiePraticien" oninput="renderNoemieTable()" class="w-full text-[10px] p-1.5 border border-teal-300 rounded shadow-inner focus:ring-teal-500 font-normal outline-none" placeholder="Praticien..."></td>
-                                <td class="p-1">
-                                    <select id="sNoemieCaisse" onchange="renderNoemieTable()" class="w-full text-[10px] p-1.5 border border-teal-300 rounded shadow-inner bg-white focus:ring-teal-500 font-normal outline-none">
-                                        <option value="">Toutes Caisses</option>
-                                    </select>
-                                </td>
-                                <td class="p-1"><input type="text" id="sNoemieFSE" oninput="renderNoemieTable()" class="w-full text-[10px] p-1.5 border border-teal-300 rounded shadow-inner text-center focus:ring-teal-500 font-normal outline-none" placeholder="N° FSE..."></td>
-                                <td class="p-1"><input type="text" id="sNoemieMontant" oninput="renderNoemieTable()" class="w-full text-[10px] p-1.5 border border-teal-300 rounded shadow-inner text-right focus:ring-teal-500 font-normal outline-none" placeholder="Montant..."></td>
-                                <td class="p-1"><input type="text" id="sNoemieEncaisse" oninput="renderNoemieTable()" class="w-full text-[10px] p-1.5 border border-teal-300 rounded shadow-inner text-center focus:ring-teal-500 font-normal outline-none" placeholder="Encaissement..."></td>
-                                <td class="p-1"><input type="text" id="sNoemieReleve" oninput="renderNoemieTable()" class="w-full text-[10px] p-1.5 border border-teal-300 rounded shadow-inner focus:ring-teal-500 font-normal outline-none" placeholder="Relevé..."></td>
-                                <td class="p-1"><input type="text" id="sNoemieInfo" oninput="renderNoemieTable()" class="w-full text-[10px] p-1.5 border border-teal-300 rounded shadow-inner focus:ring-teal-500 font-normal outline-none" placeholder="Infos..."></td>
-                                <td class="p-1 text-center"><button onclick="clearNoemieFilters()" class="text-[10px] font-bold bg-white border border-teal-400 text-teal-700 px-2 py-1 rounded hover:bg-teal-50 transition shadow-sm w-full outline-none">Effacer</button></td>
-                            </tr>
-                        </thead>
-                        <tbody id="noemieTableBody" class="text-[12px]">
-                        </tbody>
-                    </table>
-                </div>
-            </section>
-        </div>
-
-        <div id="retrosPage" class="page-hidden space-y-4">
-            <section class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden relative">
-                <div class="p-3 border-b border-gray-200 flex justify-between items-center bg-gray-50 z-30 relative">
-                    <div>
-                        <h3 class="text-sm font-bold text-gray-700">💼 Gestion des Rétrocessions</h3>
-                        <p class="text-xs text-gray-500">Suivi des paiements Titulaire / Remplaçant</p>
+            <div id="retrosPage" class="page-hidden space-y-4">
+                <section class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden relative">
+                    <div class="p-3 border-b border-gray-200 flex justify-between items-center bg-gray-50 z-30 relative">
+                        <div>
+                            <h3 class="text-sm font-bold text-gray-700">💼 Gestion des Rétrocessions</h3>
+                            <p class="text-xs text-gray-500">Suivi des paiements Titulaire / Remplaçant</p>
+                        </div>
+                        <button onclick="openRetroBilanModal()" class="bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold px-3 py-1.5 rounded transition shadow flex items-center gap-1">
+                            📊 Bilan & Régularisation
+                        </button>
                     </div>
-                    <button onclick="openRetroBilanModal()" class="bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold px-3 py-1.5 rounded transition shadow flex items-center gap-1">
-                        📊 Bilan & Régularisation
-                    </button>
+                    <div class="w-full overflow-y-auto table-scroll relative">
+                        <table class="w-full text-left border-collapse table-auto text-xs min-w-[950px]">
+                            <thead class="bg-gray-100 text-gray-600 uppercase font-semibold sticky top-0 z-20 shadow-[0_1px_2px_rgba(0,0,0,0.1)]">
+                                <tr>
+                                    <th class="p-2 w-28 bg-gray-100">Période</th>
+                                    <th class="p-2 w-24 bg-gray-100">Praticien</th>
+                                    <th class="p-2 text-center w-16 bg-gray-100">Taux %</th>
+                                    <th class="p-2 text-right w-24 bg-gray-100">Mt Kiné</th>
+                                    <th class="p-2 text-right w-24 bg-gray-100">Mt Rempl.</th>
+                                    <th class="p-2 text-right w-24 bg-purple-50 text-purple-800">Total FSE</th>
+                                    <th class="p-2 text-right w-24 bg-gray-100">Total Payé</th>
+                                    <th class="p-2 text-center w-24 bg-gray-100">Date Paie.</th>
+                                    <th class="p-2 text-right w-24 bg-gray-100">Solde</th>
+                                    <th class="p-2 text-center w-24 bg-gray-100">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="retrosTableBody" class="text-[12px] divide-y divide-gray-200">
+                                </tbody>
+                        </table>
+                    </div>
+                    <div id="retroEmptyState" class="hidden text-center py-8 text-gray-400 w-full bg-white relative z-0">
+                        Aucune rétrocession enregistrée pour cette sélection.
+                    </div>
+                </section>
+            </div>
+
+        </main>
+
+        <div id="fseModal" class="hidden fixed inset-0 z-50 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <div class="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[95vh] flex flex-col overflow-hidden">
+                <div class="flex justify-between items-center bg-teal-600 text-white p-4">
+                    <div>
+                        <h2 id="fseFormTitle" class="text-lg font-bold">Saisie d'un Lot de Facturation</h2>
+                        <div class="flex items-center gap-3 mt-1">
+                            <p class="text-xs text-teal-100">Dernier lot : <strong id="lastLotInfo" class="text-white font-mono bg-teal-700 px-1.5 py-0.5 rounded shadow-sm">-</strong></p>
+                            <div class="flex items-center gap-2 text-[11px] bg-teal-800 px-2 py-0.5 rounded shadow-inner border border-teal-500">
+                                <span class="text-teal-200 uppercase font-bold">Total Saisi :</span>
+                                <span class="text-teal-300">RO <span id="fseLiveTotalRO" class="text-white font-bold font-mono text-xs">0.00</span>€</span>
+                                <span class="text-teal-500">|</span>
+                                <span class="text-indigo-300">RC <span id="fseLiveTotalRC" class="text-white font-bold font-mono text-xs">0.00</span>€</span>
+                                <span class="text-teal-500">|</span>
+                                <span class="text-emerald-300">Global <strong id="fseLiveTotalGlobal" class="text-white font-black font-mono text-xs">0.00</strong>€</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-4">
+                        <span class="text-xs text-teal-100 italic">Assigné à : <strong id="lblFormPraticien" class="text-white"></strong></span>
+                        <button type="button" onclick="closeFseModal()" class="text-teal-200 hover:text-white text-2xl font-bold leading-none">✕</button>
+                    </div>
                 </div>
-                <div class="w-full overflow-y-auto table-scroll relative">
-                    <table class="w-full text-left border-collapse table-auto text-xs min-w-[950px]">
-                        <thead class="bg-gray-100 text-gray-600 uppercase font-semibold sticky top-0 z-20 shadow-[0_1px_2px_rgba(0,0,0,0.1)]">
+
+                <div class="p-4 overflow-y-auto w-full">
+                    <form id="fseForm" onsubmit="saveFSE(event)" onkeydown="handleFormEnter(event, 'fseFacturesList', ['fse-num-input', 'fse-patient-input', 'fse-ro-input', 'fse-rc-input'])">
+                        <div class="grid grid-cols-1 md:grid-cols-12 gap-3 mb-4 border-b border-gray-200 pb-4 bg-teal-50/30 p-3 rounded-lg border border-teal-100 items-end">
+                            <div class="md:col-span-3">
+                                <label class="block text-xs font-bold text-teal-800 uppercase mb-1">Date du Lot *</label>
+                                <input type="date" id="fseDate" required class="w-full border border-teal-300 rounded p-2 text-sm bg-white focus:ring-teal-500 shadow-sm">
+                            </div>
+                            <div class="md:col-span-2">
+                                <label class="block text-xs font-bold text-teal-800 uppercase mb-1">N° du Lot</label>
+                                <input type="text" id="fseLot" placeholder="Ex: 142" class="w-full border border-teal-300 rounded p-2 text-sm bg-white focus:ring-teal-500 shadow-sm">
+                            </div>
+                            <div class="md:col-span-1 flex justify-center pb-2.5">
+                                <label class="flex items-center gap-1 cursor-pointer text-[11px] font-bold text-teal-800 hover:text-teal-600 transition whitespace-nowrap" title="Lot Dégradé">
+                                    <input type="checkbox" id="fseDegradeLot" class="w-3.5 h-3.5 text-teal-600 rounded focus:ring-teal-500 cursor-pointer"> Dég.
+                                </label>
+                            </div>
+                            <div class="md:col-span-3">
+                                <label class="block text-xs font-bold text-teal-800 uppercase mb-1">Caisse (RO)</label>
+                                <input type="text" id="fseCaisse" list="caissesList" placeholder="Ex: CPAM 75" class="w-full border border-teal-300 rounded p-2 text-sm bg-white focus:ring-teal-500 shadow-sm">
+                            </div>
+                            <div class="md:col-span-3 grid grid-cols-2 gap-2">
+                                <div>
+                                    <label class="block text-[10px] font-bold text-gray-500 uppercase mb-1 text-center truncate">Générer</label>
+                                    <input type="number" id="nbFseToAdd" value="1" min="1" class="w-full border border-gray-300 rounded p-2 text-sm bg-white text-center shadow-sm">
+                                </div>
+                                <div class="flex items-end">
+                                    <button type="button" onclick="updateNbFseRows()" class="w-full bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-2 rounded text-xs transition shadow-sm border border-gray-300 h-[38px] px-1 truncate">Ajouter</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- ZONE DE DÉPÔT PDF -->
+                        <div id="pdf-drop-zone" class="mb-4 border-2 border-dashed border-teal-400 bg-teal-50/50 rounded-lg p-6 text-center cursor-pointer hover:bg-teal-100 transition"
+                            ondragover="event.preventDefault(); this.classList.add('bg-teal-200');"
+                            ondragleave="this.classList.remove('bg-teal-200');"
+                            ondrop="handlePDFDrop(event)">
+                            <p class="text-sm font-bold text-teal-800">📄 Glissez-déposez vos Duplicatas FSE (PDF) ici</p>
+                            <p class="text-xs text-teal-600 mt-1">L'extraction remplira automatiquement les lignes en dessous.</p>
+                            <input type="file" id="pdf-file-input" multiple accept="application/pdf" class="hidden" onchange="processSelectedPDFs(event)">
+                        </div>
+
+                        <div class="bg-indigo-50/40 p-4 rounded-lg border border-indigo-200">
+                            <div class="flex items-center gap-2 px-1 pb-2 text-[10px] font-bold text-indigo-800 uppercase border-b border-indigo-100 mb-2">
+                                <div class="w-24">N° FSE</div>
+                                <div class="flex-1 min-w-[150px]">Patient *</div>
+                                <div class="w-20">Part RO €</div>
+                                <div class="w-20">Part RC €</div>
+                                <div class="w-6 text-center"></div>
+                            </div>
+                            <div id="fseFacturesList" class="space-y-2"></div>
+                        </div>
+
+                        <div class="mt-6 flex justify-end">
+                            <button type="submit" id="submitBtnFse" class="bg-teal-600 hover:bg-teal-700 text-white font-bold py-2.5 px-8 rounded-lg shadow-md transition text-sm">Enregistrer le Lot</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div id="noemieModal" class="hidden fixed inset-0 z-50 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <div class="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[95vh] flex flex-col">
+                <div class="flex justify-between items-center border-b border-gray-200 p-4 bg-gray-50 rounded-t-xl">
+                    <div>
+                        <h3 class="text-lg font-bold text-gray-900">Saisie d'un Retour NOEMIE</h3>
+                        <p class="text-[10px] text-gray-500">Verrouillage automatique des factures trouvées.</p>
+                    </div>
+                    <div class="flex items-center gap-4">
+                        <span class="text-xs text-gray-500 italic bg-white border px-2 py-1 rounded shadow-sm">Assigné à : <strong id="lblNoemiePraticien" class="text-teal-700"></strong></span>
+                        <button onclick="closeNoemieModal()" class="text-gray-400 hover:text-gray-600 text-2xl font-bold leading-none">✕</button>
+                    </div>
+                </div>
+                <div class="p-4 overflow-y-auto w-full">
+                    <form id="noemieForm" onsubmit="saveNoemieManual(event)" onkeydown="handleFormEnter(event, 'noemieFacturesList', ['fse-input', 'montant-input'])">
+                        <div class="flex flex-wrap items-center gap-4 bg-gray-100 p-3 rounded-lg border border-gray-200 mb-4">
+                            <span class="text-xs font-bold text-gray-700 uppercase">Origine :</span>
+                            <label class="flex items-center gap-1.5 text-sm font-medium cursor-pointer">
+                                <input type="radio" name="cat_origine" tabindex="-1" id="cat_noemie" class="w-4 h-4 text-teal-600 focus:ring-teal-500 cursor-pointer" checked> NOEMIE
+                            </label>
+                            <label class="flex items-center gap-1.5 text-sm font-medium cursor-pointer">
+                                <input type="radio" name="cat_origine" tabindex="-1" id="cat_justif" class="w-4 h-4 text-teal-600 focus:ring-teal-500 cursor-pointer"> Justificatif
+                            </label>
+                            <label class="flex items-center gap-1.5 text-sm font-medium cursor-pointer">
+                                <input type="radio" name="cat_origine" tabindex="-1" id="cat_releve" class="w-4 h-4 text-teal-600 focus:ring-teal-500 cursor-pointer"> Relevé Bancaire
+                            </label>
+                        </div>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-12 gap-x-4 gap-y-4 items-end mb-4">
+                            <div class="md:col-span-3"><label class="block text-xs font-bold text-gray-600 uppercase mb-1">Date *</label><input type="date" id="n_date" required class="w-full border border-gray-300 rounded p-2 text-sm focus:ring-teal-500 shadow-sm"></div>
+                            <div class="md:col-span-3"><label class="block text-xs font-bold text-gray-600 uppercase mb-1">Caisse / Mut</label><input type="text" id="n_caisse" list="caissesList" placeholder="CPAM, MGEN..." class="w-full border border-gray-300 rounded p-2 text-sm focus:ring-teal-500 shadow-sm"></div>
+                            <div class="md:col-span-3"><label class="block text-xs font-bold text-gray-600 uppercase mb-1">Encaissé le</label><input type="date" tabindex="-1" id="n_encaisse" class="w-full border border-indigo-300 rounded p-2 text-sm focus:ring-indigo-500 shadow-sm bg-indigo-50/30"></div>
+                            <div class="md:col-span-3"><label class="block text-xs font-bold text-gray-600 uppercase mb-1">N° Relevé</label><input type="text" tabindex="-1" id="n_releve" class="w-full border border-gray-300 rounded p-2 text-sm focus:ring-teal-500 shadow-sm"></div>
+                            <div class="md:col-span-12"><label class="block text-xs font-bold text-gray-600 uppercase mb-1">Informations / Commentaire</label><input type="text" tabindex="-1" id="n_info" placeholder="Commentaire..." class="w-full border border-gray-300 rounded p-2 text-sm focus:ring-teal-500 shadow-sm"></div>
+                        </div>
+
+                        <!-- ZONE DE DÉPÔT PDF NOEMIE -->
+                        <div id="noemie-pdf-drop-zone" class="mb-4 border-2 border-dashed border-indigo-400 bg-indigo-50/50 rounded-lg p-6 text-center cursor-pointer hover:bg-indigo-100 transition"
+                            ondragover="event.preventDefault(); this.classList.add('bg-indigo-200');"
+                            ondragleave="this.classList.remove('bg-indigo-200');"
+                            ondrop="handleNoemiePDFDrop(event)">
+                            <p class="text-sm font-bold text-indigo-800">📄 Glissez-déposez vos Bordereaux NOEMIE (PDF) ici</p>
+                            <p class="text-xs text-indigo-600 mt-1">Les factures et montants seront pointés automatiquement.</p>
+                            <input type="file" id="noemie-pdf-file-input" multiple accept="application/pdf" class="hidden" onchange="processSelectedNoemiePDFs(event)">
+                        </div>
+                        
+                        <div class="bg-teal-50/40 p-4 rounded-lg border border-teal-200 md:w-2/3 mx-auto">
+                            <div class="flex justify-between items-end mb-3 border-b border-teal-100 pb-2 gap-4">
+                                <label class="block text-xs font-bold text-teal-800 uppercase pb-1">Factures du retour</label>
+                                <div class="flex items-center gap-2">
+                                    <label class="text-[10px] font-bold text-gray-500 uppercase">Générer</label>
+                                    <input type="number" id="nbNoemieFseToAdd" value="1" min="1" class="w-16 border border-gray-300 rounded p-1 text-xs bg-white text-center shadow-sm focus:ring-teal-500">
+                                    <button type="button" onclick="updateNbNoemieFseRows()" class="text-[10px] font-bold bg-white text-teal-700 px-3 py-1.5 rounded hover:bg-teal-100 transition shadow-sm border border-teal-300">Ajouter</button>
+                                </div>
+                            </div>
+                            <div id="noemieFacturesList" class="space-y-2"></div>
+                            <div class="flex justify-end items-center mt-3 p-2 bg-indigo-50 rounded border border-indigo-100 shadow-inner">
+                                <span class="font-semibold text-gray-700 mr-2">Total en cours :</span>
+                                <span id="noemieLiveTotal" class="font-bold text-xl text-indigo-700">0.00</span>
+                                <span class="font-bold text-xl text-indigo-700 ml-1">€</span>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-6 flex justify-end gap-3">
+                            <button type="submit" id="btnSubmitNoemieNew" class="bg-teal-600 hover:bg-teal-700 text-white font-bold py-2.5 px-6 rounded-lg transition shadow-md text-sm focus:ring-4 focus:ring-teal-300 outline-none">Enregistrer et Nouveau</button>
+                            <button type="submit" id="btnSubmitNoemieAction" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-6 rounded-lg transition shadow-md text-sm focus:ring-4 focus:ring-emerald-300 outline-none">Sauvegarder et Pointer</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div id="retroModal" class="hidden fixed inset-0 z-50 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+                <div class="flex justify-between items-center border-b border-gray-200 p-4 bg-purple-50 rounded-t-xl">
+                    <div>
+                        <h3 id="retroModalTitle" class="text-lg font-bold text-purple-900">Saisie Rétrocession</h3>
+                    </div>
+                    <button onclick="closeRetroModal()" class="text-purple-400 hover:text-purple-600 text-2xl font-bold leading-none">✕</button>
+                </div>
+                <div class="p-4 overflow-y-auto w-full">
+                    <form id="retroForm" onsubmit="saveRetro(event)">
+                        <div class="grid grid-cols-2 gap-4 mb-4">
+                            <div>
+                                <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Année *</label>
+                                <input type="number" id="retroAnnee" required class="w-full border border-gray-300 rounded p-2 text-sm focus:ring-purple-500 shadow-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Mois *</label>
+                                <select id="retroMois" required class="w-full border border-gray-300 rounded p-2 text-sm focus:ring-purple-500 shadow-sm bg-white">
+                                    <option value="01">Janvier</option><option value="02">Février</option><option value="03">Mars</option>
+                                    <option value="04">Avril</option><option value="05">Mai</option><option value="06">Juin</option>
+                                    <option value="07">Juillet</option><option value="08">Août</option><option value="09">Septembre</option>
+                                    <option value="10">Octobre</option><option value="11">Novembre</option><option value="12">Décembre</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-3 gap-4 mb-4 border-t border-gray-100 pt-4">
+                            <div>
+                                <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Taux Rétro %</label>
+                                <input type="number" step="0.01" id="retroTaux" class="w-full border border-gray-300 rounded p-2 text-sm focus:ring-purple-500 shadow-sm" placeholder="Ex: 25">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Mt Kiné (€) *</label>
+                                <input type="number" step="0.01" id="retroKine" required class="w-full border border-gray-300 rounded p-2 text-sm focus:ring-purple-500 shadow-sm" placeholder="0.00">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Mt Remplaçant (€) *</label>
+                                <input type="number" step="0.01" id="retroRemplacant" required class="w-full border border-gray-300 rounded p-2 text-sm focus:ring-purple-500 shadow-sm" placeholder="0.00">
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4 mb-4 border-t border-gray-100 pt-4">
+                            <div>
+                                <label class="block text-xs font-bold text-emerald-700 uppercase mb-1">Montant Payé (€)</label>
+                                <input type="number" step="0.01" id="retroPaye" class="w-full border border-emerald-300 bg-emerald-50 rounded p-2 text-sm focus:ring-emerald-500 shadow-sm" placeholder="0.00">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Date de Paiement</label>
+                                <input type="date" id="retroDatePaiement" class="w-full border border-gray-300 rounded p-2 text-sm focus:ring-purple-500 shadow-sm">
+                            </div>
+                        </div>
+                        <div class="mt-6 flex justify-end">
+                            <button type="submit" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2.5 px-8 rounded-lg shadow-md transition text-sm">Enregistrer Rétro</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div id="retroRegulModal" class="hidden fixed inset-0 z-[60] bg-gray-900/70 backdrop-blur-sm flex items-center justify-center p-4">
+            <div class="bg-white rounded-xl shadow-2xl w-full max-w-md flex flex-col overflow-hidden">
+                <div class="flex justify-between items-center bg-orange-50 border-b border-orange-200 p-4">
+                    <div>
+                        <h3 class="text-lg font-bold text-orange-900">Régulariser Rétrocession</h3>
+                        <p id="retroRegulSubtitle" class="text-xs text-orange-700">Mettre à jour les montants réels</p>
+                    </div>
+                    <button onclick="closeRetroRegulModal()" class="text-orange-400 hover:text-orange-700 text-2xl font-bold leading-none">✕</button>
+                </div>
+                <div class="p-5">
+                    <p class="text-xs text-gray-500 mb-4">Saisissez les montants finaux validés (URSSAF/SNIR). Les valeurs d'origine seront conservées pour historique.</p>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-bold text-gray-700 uppercase mb-1">Nouveau Mt Kiné (€)</label>
+                            <input type="number" step="0.01" id="regKineInput" class="w-full border border-gray-300 rounded p-2 text-sm focus:ring-orange-500">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-700 uppercase mb-1">Nouveau Mt Remplaçant (€)</label>
+                            <input type="number" step="0.01" id="regRemplacantInput" class="w-full border border-gray-300 rounded p-2 text-sm focus:ring-orange-500">
+                        </div>
+                        <button onclick="saveRegulRetro()" class="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 px-4 rounded transition shadow text-sm mt-2">
+                            Valider la Régularisation
+                        </button>
+                        <button onclick="clearRegulRetro()" class="w-full bg-white hover:bg-gray-50 text-gray-600 border border-gray-300 font-bold py-2 px-4 rounded transition shadow-sm text-xs mt-2">
+                            Annuler la régularisation (Reset)
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="retroBilanModal" class="hidden fixed inset-0 z-[60] bg-gray-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <div class="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+                <div class="flex justify-between items-center bg-purple-700 border-b border-purple-800 p-4 rounded-t-xl">
+                    <div>
+                        <h3 class="text-lg font-bold text-white">📊 Bilan des Rétrocessions</h3>
+                        <p id="retroBilanSubtitle" class="text-xs text-purple-200">Synthèse Globale (Année sélectionnée)</p>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <button onclick="printRetroBilan()" class="bg-white text-purple-700 hover:bg-purple-50 text-xs font-bold px-3 py-1.5 rounded transition shadow flex items-center gap-1">
+                            🖨️ Générer PDF
+                        </button>
+                        <button onclick="closeRetroBilanModal()" class="text-purple-200 hover:text-white text-2xl font-bold leading-none">✕</button>
+                    </div>
+                </div>
+                <div class="w-full overflow-y-auto p-6 bg-gray-50/50" id="retroBilanPrintArea">
+                    <div class="mb-6 border-b border-gray-200 pb-4">
+                        <h2 class="text-2xl font-black text-gray-800 mb-1" id="printBilanTitle">Bilan Rétrocessions</h2>
+                        <p class="text-sm text-gray-500" id="printBilanDetails"></p>
+                    </div>
+                    
+                    <div class="bg-white rounded-xl border border-gray-200 shadow-sm mb-6 overflow-hidden">
+                        <table class="w-full text-left border-collapse table-auto text-xs">
+                            <thead class="bg-purple-50 text-purple-900 font-semibold border-b border-purple-100">
+                                <tr>
+                                    <th class="p-2">Mois</th>
+                                    <th class="p-2 text-right">Mt Kiné</th>
+                                    <th class="p-2 text-right">Mt Rempl.</th>
+                                    <th class="p-2 text-right">Total FSE</th>
+                                    <th class="p-2 text-right">Total Payé</th>
+                                    <th class="p-2 text-right">Solde</th>
+                                </tr>
+                            </thead>
+                            <tbody id="retroBilanMonthsBody" class="divide-y divide-gray-100 bg-white">
+                                </tbody>
+                        </table>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                        <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                            <h4 class="text-xs font-bold text-gray-500 uppercase mb-3">Totaux d'Origine (Estimés)</h4>
+                            <div class="flex justify-between mb-1"><span class="text-sm text-gray-600">Total Kiné:</span> <span class="font-mono font-bold" id="bilanOrigKine">0.00 €</span></div>
+                            <div class="flex justify-between mb-1"><span class="text-sm text-gray-600">Total Remplaçant:</span> <span class="font-mono font-bold" id="bilanOrigRempl">0.00 €</span></div>
+                            <div class="flex justify-between mt-2 pt-2 border-t border-gray-300"><span class="text-sm font-bold text-gray-800">Total FSE Estimé:</span> <span class="font-mono font-black text-gray-900" id="bilanOrigTotal">0.00 €</span></div>
+                        </div>
+                        <div class="bg-orange-50 p-4 rounded-xl border border-orange-200 shadow-sm">
+                            <h4 class="text-xs font-bold text-orange-800 uppercase mb-3">Totaux Régularisés (Réels)</h4>
+                            <div class="flex justify-between mb-1"><span class="text-sm text-orange-700">Total Kiné:</span> <span class="font-mono font-bold text-orange-900" id="bilanRegKine">0.00 €</span></div>
+                            <div class="flex justify-between mb-1"><span class="text-sm text-orange-700">Total Remplaçant:</span> <span class="font-mono font-bold text-orange-900" id="bilanRegRempl">0.00 €</span></div>
+                            <div class="flex justify-between mt-2 pt-2 border-t border-orange-300"><span class="text-sm font-bold text-orange-900">Total FSE Réel:</span> <span class="font-mono font-black text-orange-900" id="bilanRegTotal">0.00 €</span></div>
+                        </div>
+                    </div>
+
+                    <div class="bg-white p-5 rounded-xl border-2 border-gray-800 shadow-sm mb-6">
+                        <div class="flex flex-col md:flex-row justify-between items-center gap-4">
+                            <div>
+                                <h4 class="text-sm font-bold text-gray-500 uppercase mb-1">Montants Déjà Versés</h4>
+                                <div class="text-2xl font-mono font-bold text-emerald-600" id="bilanTotalPaye">0.00 €</div>
+                            </div>
+                            <div class="text-right">
+                                <h4 class="text-sm font-bold text-gray-800 uppercase mb-1">Reste à Régulariser (Solde Final)</h4>
+                                <div class="text-3xl font-mono font-black" id="bilanSoldeFinal">0.00 €</div>
+                                <p class="text-[10px] text-gray-500 mt-1" id="bilanSoldeInfo">Différence entre (Total Réel) et (Montants Versés)</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="impayesModal" class="hidden fixed inset-0 z-50 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <div class="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+                <div class="flex justify-between items-center bg-rose-700 border-b border-rose-800 p-4 rounded-t-xl">
+                    <div>
+                        <h3 class="text-lg font-bold text-white">⚠️ Liste Globale des Impayés</h3>
+                        <p class="text-xs text-rose-200">Toutes les factures non soldées intégralement.</p>
+                    </div>
+                    <div class="flex items-center gap-4">
+                        <input type="text" id="sImpayesText" oninput="renderImpayesTable()" placeholder="Rechercher (Patient, FSE, Mutuelle)..." class="w-64 p-1.5 border border-rose-500 rounded bg-white text-sm focus:outline-none focus:ring-2 focus:ring-rose-300 shadow-inner">
+                        <button onclick="closeImpayesModal()" class="text-rose-200 hover:text-white text-2xl font-bold leading-none">✕</button>
+                    </div>
+                </div>
+                <div class="w-full overflow-y-auto table-scroll flex-1">
+                    <table class="w-full text-left border-collapse table-auto text-sm">
+                        <thead class="bg-rose-50 text-rose-800 font-semibold border-b border-rose-200 sticky top-0 z-10 shadow-sm">
                             <tr>
-                                <th class="p-2 w-28 bg-gray-100">Période</th>
-                                <th class="p-2 w-24 bg-gray-100">Praticien</th>
-                                <th class="p-2 text-center w-16 bg-gray-100">Taux %</th>
-                                <th class="p-2 text-right w-24 bg-gray-100">Mt Kiné</th>
-                                <th class="p-2 text-right w-24 bg-gray-100">Mt Rempl.</th>
-                                <th class="p-2 text-right w-24 bg-purple-50 text-purple-800">Total FSE</th>
-                                <th class="p-2 text-right w-24 bg-gray-100">Total Payé</th>
-                                <th class="p-2 text-center w-24 bg-gray-100">Date Paie.</th>
-                                <th class="p-2 text-right w-24 bg-gray-100">Solde</th>
-                                <th class="p-2 text-center w-24 bg-gray-100">Actions</th>
+                                <th class="p-3 w-28 cursor-pointer hover:bg-rose-100 transition" onclick="setSortImpayes('date')">Date ↕</th>
+                                <th class="p-3 w-28 cursor-pointer hover:bg-rose-100 transition" onclick="setSortImpayes('praticien')">Praticien ↕</th>
+                                <th class="p-3 cursor-pointer hover:bg-rose-100 transition" onclick="setSortImpayes('patient')">Patient ↕</th>
+                                <th class="p-3 w-24 text-center cursor-pointer hover:bg-rose-100 transition" onclick="setSortImpayes('numFSE')">N° FSE ↕</th>
+                                <th class="p-3 w-32 cursor-pointer hover:bg-rose-100 transition" onclick="setSortImpayes('mutuelle')">Mutuelle ↕</th>
+                                <th class="p-3 text-right w-24 cursor-pointer hover:bg-rose-100 transition" onclick="setSortImpayes('montant')">Montant Dû ↕</th>
                             </tr>
                         </thead>
-                        <tbody id="retrosTableBody" class="text-[12px] divide-y divide-gray-200">
-                        </tbody>
+                        <tbody id="impayesTableBody" class="divide-y divide-gray-100"></tbody>
                     </table>
                 </div>
-                <div id="retroEmptyState" class="hidden text-center py-8 text-gray-400 w-full bg-white relative z-0">
-                    Aucune rétrocession enregistrée pour cette sélection.
-                </div>
-            </section>
+            </div>
         </div>
+
+        <div id="detailsImpayesModal" class="hidden fixed inset-0 z-[90] bg-gray-900/70 backdrop-blur-sm flex items-center justify-center p-4">
+            <div class="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+                <div class="flex justify-between items-center bg-orange-600 border-b border-orange-700 p-4 rounded-t-xl">
+                    <div>
+                        <h3 id="detailsImpayesTitle" class="text-lg font-bold text-white">Détails Impayés</h3>
+                        <p id="detailsImpayesSubtitle" class="text-xs text-orange-200">Factures à relancer</p>
+                    </div>
+                    <button onclick="closeDetailsImpayesModal()" class="text-orange-200 hover:text-white text-2xl font-bold leading-none">✕</button>
+                </div>
+                <div class="w-full overflow-y-auto table-scroll flex-1 p-2">
+                    <table class="w-full text-left border-collapse table-auto text-sm">
+                        <thead class="bg-orange-200 text-orange-900 text-xs uppercase text-left sticky top-0">
+                            <tr>
+                                <th class="p-2 font-bold w-24">Date</th>
+                                <th class="p-2 font-bold text-center w-16">Lot</th>
+                                <th class="p-2 font-bold text-center w-20">N° DRE</th>
+                                <th class="p-2 font-bold w-24">Praticien</th>
+                                <th class="p-2 font-bold">Patient</th>
+                                <th class="p-2 font-bold text-center w-24">N° FSE</th>
+                                <th class="p-2 font-bold w-32">Mutuelle</th>
+                                <th class="p-2 font-bold text-right w-24">Montant Dû</th>
+                            </tr>
+                        </thead>
+                        <tbody id="detailsImpayesBody" class="divide-y divide-gray-100"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div id="fseDetailsModal" class="hidden fixed inset-0 z-[100] bg-gray-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <div class="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col">
+                <div class="flex justify-between items-center bg-teal-700 border-b border-teal-800 p-4">
+                    <h3 class="text-base font-bold text-white">Détails de la Facture</h3>
+                    <button onclick="closeFseDetailsModal()" class="text-teal-200 hover:text-white text-2xl font-bold leading-none">✕</button>
+                </div>
+                <div class="p-5 space-y-4" id="fseDetailsContent"></div>
+            </div>
+        </div>
+
+        <div id="dreModal" class="hidden fixed inset-0 z-[80] bg-gray-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <div class="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden flex flex-col">
+                <div class="flex justify-between items-start bg-indigo-50 border-b border-indigo-100 p-4">
+                    <div>
+                        <h3 class="text-[10px] font-bold text-indigo-500 uppercase tracking-wide">Ajouter DRE / Mutuelle</h3>
+                        <div class="text-2xl font-black text-indigo-700 mt-0.5 font-mono">FSE N° <span id="dreModalFseNum"></span></div>
+                        <div class="text-xs text-indigo-900 mt-1">Patient : <strong id="dreModalPatientName"></strong></div>
+                    </div>
+                    <button onclick="closeDreModal()" class="text-indigo-400 hover:text-indigo-800 text-2xl font-bold leading-none mt-1">✕</button>
+                </div>
+                <div class="p-4 space-y-4">
+                    <p class="text-xs text-gray-600">Renseignez les informations complémentaires pour la part RC.</p>
+                    <div><label class="block text-[11px] font-bold text-gray-600 uppercase mb-1">N° DRE</label><input type="text" id="dreModal_num" class="w-full border border-gray-300 rounded p-2 text-sm focus:ring-indigo-500" placeholder="Ex: 987654"></div>
+                    <div><label class="block text-[11px] font-bold text-gray-600 uppercase mb-1">Mutuelle</label><input type="text" id="dreModal_mutuelle" list="mutuellesList" class="w-full border border-gray-300 rounded p-2 text-sm focus:ring-indigo-500" placeholder="Ex: MGEN"></div>
+                    <button onclick="saveDreAction()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded transition shadow text-sm">Valider</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="settingsModal" class="hidden fixed inset-0 z-[60] bg-gray-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <div class="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col">
+                <div class="flex justify-between items-center bg-gray-50 border-b border-gray-200 p-4">
+                    <h3 class="text-lg font-bold text-gray-900">⚙️ Gérer Praticiens</h3>
+                    <button onclick="closeSettingsModal()" class="text-gray-400 hover:text-gray-800 text-2xl font-bold leading-none">✕</button>
+                </div>
+                <div class="p-6 space-y-6">
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">Praticiens & Couleurs</label>
+                        <div id="settingsPraticiensContainer" class="space-y-2 mb-2"></div>
+                        <button type="button" onclick="addSettingsPraticienRow()" class="text-xs font-bold text-teal-600 bg-teal-50 px-2 py-1 rounded hover:bg-teal-100">+ Ajouter un praticien</button>
+                    </div>
+                    <button onclick="saveSettings()" class="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 px-4 rounded transition shadow">Sauvegarder les paramètres</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="recapModal" class="hidden fixed inset-0 z-[60] bg-gray-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <div class="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
+                <div class="flex justify-between items-center bg-gray-50 border-b border-gray-200 p-4">
+                    <div>
+                        <h3 class="text-lg font-bold text-gray-900">📊 Récapitulatif Comptable Annuel</h3>
+                        <p class="text-xs text-gray-500">Vue consolidée (Filtre Praticien et Année appliqués)</p>
+                    </div>
+                    <div class="flex items-center gap-4">
+                        <div id="kpiImpayesGlobal" class="px-4 py-2 rounded-lg font-bold text-xs shadow-sm transition-colors border">
+                            Taux d'impayés général : <span id="txtImpayesGlobal">0.00 %</span>
+                        </div>
+                        <button onclick="closeRecapModal()" class="text-gray-400 hover:text-gray-800 text-2xl font-bold leading-none">✕</button>
+                    </div>
+                </div>
+                <div class="p-4 overflow-y-auto w-full table-scroll">
+                    <table class="w-full text-left border-collapse table-auto text-xs">
+                        <thead class="bg-gray-50 text-gray-600 font-semibold border-b border-gray-200">
+                            <tr>
+                                <th class="p-2 sticky top-0 bg-gray-50">Mois</th>
+                                <th class="p-2 text-right sticky top-0 bg-teal-50/90 text-teal-800">RO Facturé</th>
+                                <th class="p-2 text-right sticky top-0 bg-teal-50/90 text-teal-800">RO Perçu</th>
+                                <th class="p-2 text-right sticky top-0 bg-indigo-50/90 text-indigo-800">RC Facturé</th>
+                                <th class="p-2 text-right sticky top-0 bg-indigo-50/90 text-indigo-800">RC Perçu</th>
+                                <th class="p-2 text-right font-bold text-gray-800 sticky top-0 bg-gray-50">Total Facturé</th>
+                                <th class="p-2 text-right font-bold text-emerald-700 sticky top-0 bg-gray-50">Total Perçu</th>
+                                <th class="p-2 text-right font-bold text-rose-600 sticky top-0 bg-gray-50">Reste à Recouvrer</th>
+                                <th class="p-2 text-right font-bold text-orange-700 sticky top-0 bg-orange-50">Taux Impayé Cumulé</th>
+                            </tr>
+                        </thead>
+                        <tbody id="recapTableBody" class="divide-y divide-gray-100 font-mono text-[12px]"></tbody>
+                        <tfoot class="bg-gray-100 font-bold border-t-2 border-gray-300 text-[12px]">
+                            <tr id="recapTableTotal"></tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div id="impayesBilanModal" class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-[70] flex items-center justify-center p-4">
+            <div class="bg-gray-50 w-full max-w-4xl rounded-2xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden border border-gray-200">
+                <div class="flex justify-between items-center bg-rose-600 text-white p-4">
+                    <h2 class="text-lg font-bold" id="impayesBilanTitle">Détail des Impayés</h2>
+                    <button type="button" onclick="document.getElementById('impayesBilanModal').classList.add('hidden')" class="text-rose-200 hover:text-white text-2xl font-bold leading-none outline-none">✕</button>
+                </div>
+                <div class="p-4 overflow-y-auto custom-scrollbar flex-1">
+                    <div class="overflow-x-auto rounded-lg border border-gray-200 shadow-sm bg-white">
+                        <table class="w-full text-left border-collapse min-w-[800px]">
+                            <thead class="bg-rose-100 text-rose-900 text-xs uppercase sticky top-0">
+                                <tr>
+                                    <th class="p-2 font-bold w-32">Date / N° FSE</th>
+                                    <th class="p-2 font-bold">Patient</th>
+                                    <th class="p-2 font-bold">Caisse / Mut.</th>
+                                    <th class="p-2 font-bold text-right w-24">Reste RO</th>
+                                    <th class="p-2 font-bold text-right w-24">Reste RC</th>
+                                    <th class="p-2 font-bold text-right w-28">Total Dû</th>
+                                </tr>
+                            </thead>
+                            <tbody id="impayesBilanBody" class="text-xs divide-y divide-gray-100">
+                                </tbody>
+                            <tfoot class="bg-rose-50 sticky bottom-0 border-t-2 border-rose-200">
+                                <tr>
+                                    <td colspan="5" class="p-3 text-right font-bold text-rose-900 uppercase">Total Sélection :</td>
+                                    <td class="p-3 text-right font-black text-rose-700 text-base font-mono" id="impayesBilanTotal">0.00 €</td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <datalist id="patientsList"></datalist>
+        <datalist id="caissesList"></datalist>
+        <datalist id="mutuellesList"></datalist>
+</div>
 
     </main>
 
@@ -1031,100 +1512,140 @@
 
         // Démarrage initial
         // ==========================================
-        // GESTION DES CABINETS & CONNEXION
+        // GESTION DES CABINETS & CONNEXION (V3 OFFICIELLE)
         // ==========================================
         let cabinetsConfig = [];
+        let selectedCabinetForLogin = null;
 
+        // 1. Chargement de la configuration des cabinets
         function loadCabinetsConfig() {
             try {
-                cabinetsConfig = JSON.parse(localStorage.getItem('saved_cabinets_v3'));
+                cabinetsConfig = JSON.parse(localStorage.getItem('saved_cabinets_v3_secure'));
                 if (!Array.isArray(cabinetsConfig) || cabinetsConfig.length === 0) throw new Error();
             } catch (e) {
                 // Configuration par défaut si aucun cabinet n'existe
                 cabinetsConfig = [
-                    { id: 'CABINET_1', name: '🏥 Cabinet Principal' },
-                    { id: 'CABINET_2', name: '🏥 Cabinet Secondaire' }
+                    { id: 'CABINET_1', name: '🏥 Cabinet Principal', code: '0000' }
                 ];
-                localStorage.setItem('saved_cabinets_v3', JSON.stringify(cabinetsConfig));
+                localStorage.setItem('saved_cabinets_v3_secure', JSON.stringify(cabinetsConfig));
             }
-            refreshCabinetsDropdowns();
-        }
-
-        function refreshCabinetsDropdowns() {
-            const loginSelect = document.getElementById('loginCabinetSelect');
+            // On met à jour le menu déroulant du header (ecran-travail)
             const headerSelect = document.getElementById('globalCabinetFilter');
-            
-            let html = '';
-            cabinetsConfig.forEach(cab => {
-                html += `<option value="${cab.id}">${cab.name}</option>`;
-            });
-
-            if(loginSelect) loginSelect.innerHTML = html;
-            if(headerSelect) {
-                headerSelect.innerHTML = html;
-                if(currentCabinet) headerSelect.value = currentCabinet;
+            if (headerSelect) {
+                headerSelect.innerHTML = cabinetsConfig.map(cab => `<option value="${cab.id}">${cab.name}</option>`).join('');
             }
         }
 
-        function loginToCabinet() {
-            const selected = document.getElementById('loginCabinetSelect').value;
-            if(!selected) return;
+        // 2. Connexion Administrateur
+        function seConnecter() {
+            const email = document.getElementById('login-email').value;
+            const pwd = document.getElementById('login-password').value;
             
-            currentCabinet = selected;
-            document.getElementById('globalCabinetFilter').value = selected;
-
-            // Masquer l'écran de connexion et afficher l'application
-            document.getElementById('loginScreen').classList.add('hidden');
-            document.getElementById('mainHeader').classList.remove('hidden');
-            document.getElementById('mainApp').classList.remove('hidden');
-
-            // Charger les données du cabinet choisi
-            loadDataForCabinet();
+            // Logique de validation Admin (Tu pourras relier ça à Supabase Auth plus tard si besoin)
+            if (email && pwd) {
+                document.getElementById('ecran-login').classList.add('hidden');
+                document.getElementById('ecran-dashboard').classList.remove('hidden');
+                renderCabinetsDashboard();
+            } else {
+                alert("Veuillez saisir vos identifiants administrateur.");
+            }
         }
 
-        // --- Modale de gestion des cabinets ---
-        function openManageCabinetsModal() {
-            const container = document.getElementById('cabinetsListContainer');
+        function deconnecterAdmin() {
+            document.getElementById('ecran-dashboard').classList.add('hidden');
+            document.getElementById('ecran-login').classList.remove('hidden');
+            document.getElementById('login-password').value = ''; // On vide le mot de passe
+        }
+
+        // 3. Affichage du Dashboard des Cabinets
+        function renderCabinetsDashboard() {
+            const container = document.getElementById('liste-cabinets');
             container.innerHTML = '';
             
             cabinetsConfig.forEach(cab => {
                 container.innerHTML += `
-                    <div class="flex justify-between items-center bg-gray-50 p-2 rounded border border-gray-200">
-                        <span class="font-bold text-gray-700 text-sm">${cab.name}</span>
-                        ${cabinetsConfig.length > 1 ? `<button onclick="deleteCabinet('${cab.id}')" class="text-rose-500 hover:text-rose-700 text-lg font-bold px-2 py-0.5 leading-none transition">×</button>` : ''}
+                    <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200 hover:shadow-md hover:border-teal-400 transition cursor-pointer flex flex-col items-center justify-center text-center transform hover:-translate-y-1" 
+                         onclick="ouvrirModalCode('${cab.id}', '${cab.name.replace(/'/g, "\\'")}')">
+                        <div class="text-4xl mb-3">🏥</div>
+                        <h3 class="font-bold text-gray-800 text-lg">${cab.name}</h3>
                     </div>
                 `;
             });
+        }
+
+        // 4. Création d'un nouveau cabinet
+        function creerCabinet() {
+            const nom = document.getElementById('nouveau-cabinet-nom').value.trim();
+            const code = document.getElementById('nouveau-cabinet-code').value.trim();
             
-            document.getElementById('manageCabinetsModal').classList.remove('hidden');
-        }
-
-        function closeManageCabinetsModal() { document.getElementById('manageCabinetsModal').classList.add('hidden'); }
-
-        function addNewCabinet() {
-            const input = document.getElementById('newCabinetName');
-            const name = input.value.trim();
-            if(name) {
+            if (nom && code) {
                 const newId = 'CAB_' + Date.now();
-                cabinetsConfig.push({ id: newId, name: name });
-                localStorage.setItem('saved_cabinets_v3', JSON.stringify(cabinetsConfig));
-                input.value = '';
-                refreshCabinetsDropdowns();
-                openManageCabinetsModal(); // Rafraîchit la liste visuelle
+                cabinetsConfig.push({ id: newId, name: nom, code: code });
+                localStorage.setItem('saved_cabinets_v3_secure', JSON.stringify(cabinetsConfig));
+                
+                document.getElementById('nouveau-cabinet-nom').value = '';
+                document.getElementById('nouveau-cabinet-code').value = '';
+                
+                loadCabinetsConfig(); // Met à jour les menus déroulants
+                renderCabinetsDashboard(); // Rafraîchit les cartes
+            } else {
+                alert("Veuillez saisir un nom et un code d'accès pour créer le cabinet.");
             }
         }
 
-        function deleteCabinet(id) {
-            if(confirm("Êtes-vous sûr de vouloir supprimer ce cabinet de la liste ? (Les données Supabase ne seront pas effacées).")) {
-                cabinetsConfig = cabinetsConfig.filter(c => c.id !== id);
-                localStorage.setItem('saved_cabinets_v3', JSON.stringify(cabinetsConfig));
-                refreshCabinetsDropdowns();
-                openManageCabinetsModal();
+        // 5. Gestion de la Modale de Code Secret
+        function ouvrirModalCode(id, nom) {
+            selectedCabinetForLogin = id;
+            document.getElementById('nom-cabinet-selectionne').innerText = nom;
+            document.getElementById('saisie-code-acces').value = '';
+            document.getElementById('modal-code').classList.remove('hidden');
+            setTimeout(() => document.getElementById('saisie-code-acces').focus(), 100);
+        }
+
+        function fermerModalCode() {
+            document.getElementById('modal-code').classList.add('hidden');
+            selectedCabinetForLogin = null;
+        }
+
+        function validerCode() {
+            const codeSaisi = document.getElementById('saisie-code-acces').value;
+            const cab = cabinetsConfig.find(c => c.id === selectedCabinetForLogin);
+            
+            if (cab && cab.code === codeSaisi) {
+                // Succès : On ferme les menus et on lance l'application
+                fermerModalCode();
+                document.getElementById('ecran-dashboard').classList.add('hidden');
+                document.getElementById('ecran-travail').classList.remove('hidden');
+                
+                currentCabinet = cab.id;
+                document.getElementById('globalCabinetFilter').value = currentCabinet;
+                
+                loadDataForCabinet(); // Charge les données FSE/Noemie spécifiques
+            } else {
+                alert("❌ Code d'accès incorrect pour ce cabinet !");
+                document.getElementById('saisie-code-acces').value = '';
+                document.getElementById('saisie-code-acces').focus();
             }
+        }
+
+        // Ajout du support de la touche "Entrée" pour valider le code
+        document.getElementById('saisie-code-acces').addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') validerCode();
+        });
+        document.getElementById('login-password').addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') seConnecter();
+        });
+
+        // 6. Quitter un cabinet (Retour au Dashboard)
+        function retourDashboard() {
+            document.getElementById('ecran-travail').classList.add('hidden');
+            document.getElementById('ecran-dashboard').classList.remove('hidden');
+            currentCabinet = null;
+            // Optionnel : on pourrait vider fseList et noemieList ici pour des raisons de sécurité mémoire
         }
 
         // ==========================================
-        // DÉMARRAGE INITIAL
+        // DÉMARRAGE INITIAL (MODIFIÉ POUR LA V3)
         // ==========================================
         window.addEventListener('DOMContentLoaded', () => {
             const currentMonthStr = String(new Date().getMonth() + 1).padStart(2, '0');
@@ -1132,15 +1653,15 @@
             document.getElementById('fseDate').valueAsDate = new Date();
             document.getElementById('n_date').valueAsDate = new Date();
             
-            // Chargement de la liste des cabinets avant la connexion
+            // Chargement de la liste des cabinets dès l'ouverture
             loadCabinetsConfig();
             
-            // Écouteur sur le changement de cabinet depuis la barre de navigation
+            // Écouteur sur le changement de cabinet RAPIDE depuis la barre de navigation
             const cabFilter = document.getElementById('globalCabinetFilter');
             if (cabFilter) {
                 cabFilter.addEventListener('change', (e) => {
                     currentCabinet = e.target.value;
-                    loadDataForCabinet(); // Recharge tout dynamiquement pour le nouveau cabinet
+                    loadDataForCabinet(); 
                 });
             }
         });
