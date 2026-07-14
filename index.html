@@ -2336,49 +2336,40 @@
                     
                     const data = parseBordereauNoemie(fullText);
                     
-                    // 1. Pré-remplissage des champs de l'en-tête
+                    // 1. Remplir UNIQUEMENT la caisse
                     if (data.caisse && !document.getElementById('n_caisse').value) {
                         document.getElementById('n_caisse').value = data.caisse;
                     }
-                    if (data.releve && !document.getElementById('n_releve').value) {
-                        document.getElementById('n_releve').value = data.releve;
-                    }
-                    if (data.dateEncaisse) {
-                        let dParts = data.dateEncaisse.split('/');
-                        if(dParts.length === 3) {
-                            let formattedDate = `${dParts[2]}-${dParts[1]}-${dParts[0]}`;
-                            // Remplissage automatique de la date de création et de la date d'encaissement
-                            document.getElementById('n_date').value = formattedDate;
-                            document.getElementById('n_encaisse').value = formattedDate;
-                        }
+                    
+                    // 2. Gestion propre de la liste des factures (permet d'ajouter plusieurs PDF à la suite)
+                    const listContainer = document.getElementById('noemieFacturesList');
+                    const firstRow = listContainer.querySelector('.facture-row:first-child');
+                    const isFirstRowEmpty = firstRow && !firstRow.querySelector('.fse-input').value && (!firstRow.querySelector('.montant-input').value || firstRow.querySelector('.montant-input').value === '');
+                    
+                    // Si la toute première ligne est vide, on l'efface pour faire place nette
+                    if (isFirstRowEmpty && listContainer.children.length === 1) {
+                        listContainer.innerHTML = ''; 
                     }
                     
-                    // 2. Ajout des lignes de factures
-                    data.fses.forEach(fse => {
-                        const firstRow = document.querySelector('#noemieFacturesList .facture-row:first-child');
-                        const isFirstRowEmpty = firstRow && !firstRow.querySelector('.fse-input').value && (!firstRow.querySelector('.montant-input').value || firstRow.querySelector('.montant-input').value === '');
+                    // Ajout des lignes de factures détectées
+                    if (data.fses && data.fses.length > 0) {
+                        data.fses.forEach(fse => {
+                            // Appel direct de ta fonction native qui génère la ligne et déclenche les couleurs
+                            if (typeof addNoemieFactureRow === 'function') {
+                                addNoemieFactureRow(fse.numFSE, fse.paye);
+                            }
+                        });
                         
-                        // Si la première ligne est complètement vide, on l'utilise
-                        if (isFirstRowEmpty && document.querySelectorAll('#noemieFacturesList .facture-row').length === 1) {
-                            let fseInput = firstRow.querySelector('.fse-input');
-                            let mtInput = firstRow.querySelector('.montant-input');
-                            fseInput.value = fse.numFSE;
-                            mtInput.value = fse.paye;
-                            
-                            // On force la mise à jour visuelle (bulle verte/bleue)
-                            updateNoemieRowInfo(fseInput);
-                        } else {
-                            // Sinon on génère une nouvelle ligne
-                            addNoemieFactureRow(fse.numFSE, fse.paye);
-                        }
-                    });
-                    
-                    // On recalcule le total général NOEMIE
-                    updateNoemieTotal();
+                        // Mise à jour du total général affiché en bas
+                        if (typeof updateNoemieTotal === 'function') updateNoemieTotal();
+                        
+                    } else {
+                        alert("Aucune facture valide n'a été détectée dans ce bordereau NOEMIE.");
+                    }
                     
                 } catch (err) {
-                    console.error("Erreur de lecture du PDF NOEMIE :", err);
-                    alert("Impossible de lire et d'extraire les données du fichier : " + file.name);
+                    console.error("Erreur PDF NOEMIE :", err);
+                    alert("Une erreur technique s'est produite lors de la lecture du fichier : " + err.message);
                 }
             }
             
@@ -2387,43 +2378,46 @@
 
         function parseBordereauNoemie(text) {
             let fses = [];
-            // Nettoyage absolu (met tout sur une seule ligne)
+            // Nettoyage absolu pour transformer tout le PDF en une seule ligne propre
             let cleanText = text.replace(/[\r\n\|]/g, ' ').replace(/\s+/g, ' ');
             
             let caisse = '';
-            // Extraction de la caisse (ex: "Envoyé par SP-SANTE le")
             let matchCaisse = cleanText.match(/Envoy[eé] par\s+([A-Za-z0-9\-]+)\s+le/i);
             if (matchCaisse) caisse = matchCaisse[1].trim();
             
-            let dateEncaisse = '';
-            // Extraction de la date (ex: "le 09/07/2026 pour")
-            let matchDate = cleanText.match(/le\s+(\d{2}\/\d{2}\/\d{4})\s+pour/i);
-            if (matchDate) dateEncaisse = matchDate[1];
+            // On coupe le texte AVANT les totaux de fin de document pour ne pas les confondre avec une facture
+            let stopIndex = cleanText.search(/\b\d+\s+paiement/i);
+            if (stopIndex === -1) stopIndex = cleanText.search(/Montant total/i);
+            let dataChunk = stopIndex !== -1 ? cleanText.substring(0, stopIndex) : cleanText;
             
-            let releve = '';
-            // Extraction du N° de relevé (ex: "référence 580")
-            let matchRef = cleanText.match(/r[eé]f[eé]rence\s+(\d+)/i);
-            if (matchRef) releve = matchRef[1];
-            
-            // Regex PARFAITE pour NOEMIE : 
-            // Nom Prénom + Espace + 9 chiffres (FSE) + Espace + Date + Espace + Montant + Espace + Lot + Espace + Montant payé + Espace + Date
-            const rowRegex = /([A-Za-zÀ-ÿ\'-]+(?:\s+[A-Za-zÀ-ÿ\'-]+)*)\s+(\d{9})\s+(\d{2}\/\d{2}\/\d{4})\s+(\d+[,\.]\d{2})\s+([A-Za-z0-9]+)\s+(\d+[,\.]\d{2})\s+(\d{2}\/\d{2}\/\d{4})/g;
-            
+            // On recherche strictement les blocs isolés de 9 chiffres (Les numéros de FSE)
+            const fseRegex = /\b(\d{9})\b/g;
+            let fseMatches = [];
             let match;
-            while ((match = rowRegex.exec(cleanText)) !== null) {
-                fses.push({
-                    patient: match[1].trim(), // Nom
-                    numFSE: match[2],         // Numéro facture
-                    paye: match[6].replace(',', '.') // Le 2ème montant (Montant Payé) formaté avec un point
-                });
+            while ((match = fseRegex.exec(dataChunk)) !== null) {
+                fseMatches.push({ fse: match[1], index: match.index });
+            }
+            
+            // Pour chaque FSE trouvée, on isole le texte jusqu'à la FSE suivante pour y piocher le montant
+            for (let i = 0; i < fseMatches.length; i++) {
+                let startIndex = fseMatches[i].index;
+                let endIndex = (i + 1 < fseMatches.length) ? fseMatches[i+1].index : dataChunk.length;
+                let chunk = dataChunk.substring(startIndex, endIndex);
                 
-                // Si la date d'encaissement globale n'avait pas été trouvée, on prend la date payée de la première facture
-                if (!dateEncaisse) {
-                    dateEncaisse = match[7];
+                // On cherche tous les montants (XX,XX ou XX.XX) appartenant à cette facture
+                let amounts = chunk.match(/\b\d+[,\.]\d{2}\b/g);
+                
+                if (amounts && amounts.length >= 1) {
+                    // Le dernier montant de la ligne correspond toujours au "Montant Payé"
+                    let paye = amounts[amounts.length - 1].replace(',', '.');
+                    fses.push({
+                        numFSE: fseMatches[i].fse,
+                        paye: paye
+                    });
                 }
             }
             
-            return { caisse, dateEncaisse, releve, fses };
+            return { caisse, fses };
         }
 </script>
 </body>
