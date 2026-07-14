@@ -363,7 +363,8 @@
                         <div id="pdf-drop-zone" class="mb-4 border-2 border-dashed border-teal-400 bg-teal-50/50 rounded-lg p-6 text-center cursor-pointer hover:bg-teal-100 transition"
                             ondragover="event.preventDefault(); this.classList.add('bg-teal-200');"
                             ondragleave="this.classList.remove('bg-teal-200');"
-                            ondrop="handlePDFDrop(event)">
+                            ondrop="handlePDFDrop(event)"
+                            onclick="document.getElementById('pdf-file-input').click()">
                             <p class="text-sm font-bold text-teal-800">📄 Glissez-déposez vos Duplicatas FSE (PDF) ici</p>
                             <p class="text-xs text-teal-600 mt-1">L'extraction remplira automatiquement les lignes en dessous.</p>
                             <input type="file" id="pdf-file-input" multiple accept="application/pdf" class="hidden" onchange="processSelectedPDFs(event)">
@@ -427,7 +428,8 @@
                         <div id="noemie-pdf-drop-zone" class="mb-4 border-2 border-dashed border-indigo-400 bg-indigo-50/50 rounded-lg p-6 text-center cursor-pointer hover:bg-indigo-100 transition"
                             ondragover="event.preventDefault(); this.classList.add('bg-indigo-200');"
                             ondragleave="this.classList.remove('bg-indigo-200');"
-                            ondrop="handleNoemiePDFDrop(event)">
+                            ondrop="handleNoemiePDFDrop(event)"
+                            onclick="document.getElementById('noemie-pdf-file-input').click()">
                             <p class="text-sm font-bold text-indigo-800">📄 Glissez-déposez vos Bordereaux NOEMIE (PDF) ici</p>
                             <p class="text-xs text-indigo-600 mt-1">Les factures et montants seront pointés automatiquement.</p>
                             <input type="file" id="noemie-pdf-file-input" multiple accept="application/pdf" class="hidden" onchange="processSelectedNoemiePDFs(event)">
@@ -2891,34 +2893,50 @@
         async function saveSettings() {
             const rows = document.querySelectorAll('#settingsPraticiensContainer > div');
             let newPrats = [];
-            rows.forEach((row, index) => {
+            
+            rows.forEach((row) => {
                 const name = row.querySelector('.set-prat-name').value.trim();
                 const color = row.querySelector('.set-prat-color').value;
                 if(name) {
                     let existing = praticiensList.find(p => p.name === name);
-                    newPrats.push({ 
-                        id: existing ? existing.id : 'prat_' + Date.now() + '_' + index, 
-                        cabinet: currentCabinet, 
-                        name: name, 
-                        color: color 
-                    });
+                    let pratData = {
+                        cabinet: currentCabinet,
+                        name: name,
+                        color: color
+                    };
+                    
+                    // Si c'est un praticien existant avec un vrai UUID, on le conserve
+                    if (existing && existing.id && existing.id.includes('-')) {
+                        pratData.id = existing.id;
+                    }
+                    
+                    newPrats.push(pratData);
                 }
             });
-            if(newPrats.length === 0) { alert("Il faut au moins un praticien !"); return; }
+            
+            if(newPrats.length === 0) { 
+                alert("Il faut au moins un praticien !"); 
+                return; 
+            }
             
             document.body.style.cursor = 'wait';
             
             // Suppression des anciens puis insertion des nouveaux
             await supabaseClient.from('praticiens_suivi').delete().eq('cabinet', currentCabinet);
-            const { error } = await supabaseClient.from('praticiens_suivi').upsert(newPrats);
+            
+            // On insère et on demande à Supabase de nous renvoyer les données créées (avec les nouveaux UUIDs)
+            const { data, error } = await supabaseClient.from('praticiens_suivi').insert(newPrats).select();
             
             document.body.style.cursor = 'default';
             
-            if (error) alert("Erreur de sauvegarde des praticiens : " + error.message);
-            else {
-                praticiensList = newPrats;
-                localStorage.setItem(`praticiens_data_v2_${currentCabinet}`, JSON.stringify(praticiensList));
-                populateSelects(); render(); renderNoemieTable(); closeSettingsModal();
+            if (error) {
+                alert("Erreur de sauvegarde des praticiens : " + error.message);
+            } else {
+                praticiensList = data || newPrats; // Mise à jour avec les vrais UUIDs
+                populateSelects(); 
+                render(); 
+                renderNoemieTable(); 
+                closeSettingsModal();
             }
         }
 
