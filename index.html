@@ -2493,7 +2493,7 @@
         // ==========================================
         async function saveNoemieManual(e) {
             e.preventDefault();
-            const gPrat = document.getElementById('globalPraticienFilter').value;
+            const gPrat = document.getElementById('globalPraticienFilter') ? document.getElementById('globalPraticienFilter').value : 'ALL';
             let targetPraticien = gPrat !== 'ALL' ? gPrat : (praticiensList.length > 0 ? praticiensList[0].name : '');
             
             const dateStr = document.getElementById('n_date').value;
@@ -2518,17 +2518,22 @@
                 totalMontantCalculated = currentTotal;
             } else {
                 document.querySelectorAll('#noemieFacturesList .flex').forEach(row => {
-                    const fse = row.querySelector('.fse-input').value.trim().toUpperCase();
-                    const montant = parseFloat((row.querySelector('.montant-input').value || '0').replace(',', '.')) || 0;
-                    if (fse || montant > 0) { facturesToSave.push({ fse: fse || '-', montant: montant }); totalMontantCalculated += montant; }
+                    const fseInput = row.querySelector('.fse-input');
+                    const montantInput = row.querySelector('.montant-input');
+                    if(fseInput && montantInput) {
+                        const fse = fseInput.value.trim().toUpperCase();
+                        const montant = parseFloat((montantInput.value || '0').replace(',', '.')) || 0;
+                        if (fse || montant > 0) { facturesToSave.push({ fse: fse || '-', montant: montant }); totalMontantCalculated += montant; }
+                    }
                 });
                 if (facturesToSave.length === 0) { alert("Veuillez saisir au moins une facture ou un montant."); return; }
             }
 
             document.body.style.cursor = 'wait';
             
+            // CORRECTION 1 : Génération d'un UUID valide
             const noemieObj = {
-                id: currentNoemieEditId || Date.now().toString() + Math.random().toString(36).substr(2, 5),
+                id: currentNoemieEditId || generateUUID(),
                 cabinet: currentCabinet,
                 catNoemie: isNoemie, catJustif: isJustif, catReleve: isReleve,
                 praticien: targetPraticien,
@@ -2536,7 +2541,14 @@
                 factures: facturesToSave, totalMontant: totalMontantCalculated, dateImport: new Date().toISOString()
             };
 
-            await dbUpdateNoemie(noemieObj);
+            // CORRECTION 2 : Envoi direct et vérification stricte
+            const { error: noemieError } = await supabaseClient.from('noemie').upsert([mapNoemieToDb(noemieObj)]);
+            
+            if (noemieError) {
+                document.body.style.cursor = 'default';
+                alert("❌ Supabase a refusé l'enregistrement NOEMIE :\n" + noemieError.message);
+                return;
+            }
             
             if (!currentNoemieEditId) {
                 noemieList.push(noemieObj);
@@ -2577,7 +2589,9 @@
                     });
                 }
 
-                if (fsesToUpdate.length > 0) await supabaseClient.from('fse').upsert(fsesToUpdate);
+                if (fsesToUpdate.length > 0) {
+                    await supabaseClient.from('fse').upsert(fsesToUpdate);
+                }
             } else {
                 const idx = noemieList.findIndex(n => n.id === currentNoemieEditId);
                 if(idx > -1) noemieList[idx] = noemieObj;
