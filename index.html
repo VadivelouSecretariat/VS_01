@@ -2811,9 +2811,22 @@
                     <td class="p-3 font-bold text-gray-800 align-top">${n.caisse}</td>
                     <td class="p-3 align-top text-center"><span class="bg-gray-100 text-gray-600 px-2.5 py-1 rounded-md text-[10px] font-bold border border-gray-200 shadow-sm">${n.factures.length} FSE</span></td>
                     <td class="p-3 text-left font-black text-teal-600 text-sm align-top">${n.totalMontant.toFixed(2)} €</td>
-                    <td class="p-3 text-center align-top">${n.encaisseLe ? new Date(n.encaisseLe).toLocaleDateString('fr-FR') : '-'}</td>
-                    <td class="p-3 align-top text-center text-gray-700 font-mono text-[11px]">${numReleveAffichage}</td>
-                    <td class="p-3 text-gray-500 italic text-[10px] align-top">${n.info||'-'}</td>
+                    
+                    <!-- CHAMP MODIFIABLE : ENCAISSÉ LE -->
+                    <td class="p-2 text-center align-top pt-3">
+                        <input type="date" value="${n.encaisseLe || ''}" onchange="inlineUpdateNoemie('${n.id}', 'encaisseLe', this.value)" class="w-full bg-transparent border border-transparent hover:border-gray-300 rounded px-1 py-1 text-xs text-gray-700 focus:bg-white focus:border-teal-500 focus:ring-1 focus:outline-none transition cursor-pointer">
+                    </td>
+                    
+                    <!-- CHAMP MODIFIABLE : N° RELEVÉ -->
+                    <td class="p-2 align-top text-center pt-3">
+                        <input type="text" value="${n.releve && n.releve !== '-' ? n.releve : ''}" placeholder="+ Relevé" onchange="inlineUpdateNoemie('${n.id}', 'releve', this.value)" class="w-24 bg-transparent border border-transparent hover:border-gray-300 rounded px-1 py-1 text-[11px] font-mono text-gray-700 text-center focus:bg-white focus:border-teal-500 focus:ring-1 focus:outline-none transition placeholder-gray-400">
+                    </td>
+                    
+                    <!-- CHAMP MODIFIABLE : INFO / COM -->
+                    <td class="p-2 align-top pt-3">
+                        <input type="text" value="${n.info && n.info !== '-' ? n.info : ''}" placeholder="Commentaire..." onchange="inlineUpdateNoemie('${n.id}', 'info', this.value)" class="w-full bg-transparent border border-transparent hover:border-gray-300 rounded px-1 py-1 text-[10px] italic text-gray-600 focus:bg-white focus:border-teal-500 focus:ring-1 focus:outline-none transition placeholder-gray-300">
+                    </td>
+                    
                     <td class="p-3 text-center align-top">
                         <button onclick="editNoemie('${n.id}')" class="text-amber-500 hover:text-amber-700 mx-1 text-sm outline-none" title="Modifier">✏️</button>
                         <button onclick="deleteNoemie('${n.id}')" class="text-gray-400 hover:text-rose-600 mx-1 text-sm outline-none" title="Supprimer">🗑️</button>
@@ -3211,6 +3224,196 @@
                 else { alert(`✅ Terminé ! ${fsesToUpdate.length} FSE ont été mises à jour.`); render(); }
             } else { alert("✅ Tout est déjà parfait !"); }
             document.body.style.cursor = 'default';
+        }
+
+        // ==========================================
+        // GESTION MODALE IMPAYÉS GLOBALE
+        // ==========================================
+        let impayesSortCol = 'date';
+        let impayesSortAsc = false;
+
+        function openImpayesModal() {
+            document.getElementById('impayesModal').classList.remove('hidden');
+            renderImpayesTable();
+        }
+
+        function closeImpayesModal() {
+            document.getElementById('impayesModal').classList.add('hidden');
+        }
+
+        function setSortImpayes(col) {
+            if (impayesSortCol === col) impayesSortAsc = !impayesSortAsc;
+            else { impayesSortCol = col; impayesSortAsc = true; }
+            renderImpayesTable();
+        }
+
+        function renderImpayesTable() {
+            const tbody = document.getElementById('impayesTableBody');
+            if (!tbody) return;
+            
+            const searchTxt = (document.getElementById('sImpayesText') ? document.getElementById('sImpayesText').value.toLowerCase() : '');
+            
+            // On récupère toutes les factures non soldées et non défacturées
+            let impayes = fseList.filter(f => !f.isDefacture && !f.isLocked && ((f.partRO > 0 && !f.checkRO) || (f.partRC > 0 && !f.checkRC)));
+            
+            if (searchTxt) {
+                impayes = impayes.filter(f => (f.patient||'').toLowerCase().includes(searchTxt) || (f.numFSE||'').toLowerCase().includes(searchTxt) || (f.mutuelle||'').toLowerCase().includes(searchTxt));
+            }
+            
+            impayes.sort((a,b) => {
+                let vA, vB;
+                if(impayesSortCol === 'date') { vA = new Date(a.date).getTime(); vB = new Date(b.date).getTime(); }
+                else if(impayesSortCol === 'patient') { vA = (a.patient||'').toLowerCase(); vB = (b.patient||'').toLowerCase(); }
+                else if(impayesSortCol === 'praticien') { vA = (a.praticien||'').toLowerCase(); vB = (b.praticien||'').toLowerCase(); }
+                else if(impayesSortCol === 'numFSE') { vA = a.numFSE; vB = b.numFSE; }
+                else if(impayesSortCol === 'mutuelle') { vA = (a.mutuelle || a.caisse || '').toLowerCase(); vB = (b.mutuelle || b.caisse || '').toLowerCase(); }
+                else if(impayesSortCol === 'montant') { 
+                    vA = (a.partRO > 0 && !a.checkRO ? a.partRO : 0) + (a.partRC > 0 && !a.checkRC ? a.partRC : 0);
+                    vB = (b.partRO > 0 && !b.checkRO ? b.partRO : 0) + (b.partRC > 0 && !b.checkRC ? b.partRC : 0);
+                }
+                
+                if(vA < vB) return impayesSortAsc ? -1 : 1;
+                if(vA > vB) return impayesSortAsc ? 1 : -1;
+                return 0;
+            });
+            
+            tbody.innerHTML = '';
+            impayes.forEach(f => {
+                let du = 0;
+                if(f.partRO > 0 && !f.checkRO) du += f.partRO;
+                if(f.partRC > 0 && !f.checkRC) du += f.partRC;
+                
+                tbody.innerHTML += `
+                    <tr class="hover:bg-rose-50 transition border-b border-gray-100">
+                        <td class="p-3">${new Date(f.date).toLocaleDateString('fr-FR')}</td>
+                        <td class="p-3">${getPraticienBadge(f.praticien)}</td>
+                        <td class="p-3 font-bold text-gray-800">${f.patient}</td>
+                        <td class="p-3 text-center font-mono">${f.numFSE}</td>
+                        <td class="p-3 truncate max-w-[150px]">${f.mutuelle || f.caisse}</td>
+                        <td class="p-3 text-right font-black text-rose-600">${du.toFixed(2)} €</td>
+                    </tr>
+                `;
+            });
+        }
+
+        // ==========================================
+        // GESTION MODALE BILAN (12 MOIS GARANTIS)
+        // ==========================================
+        function openRecapModal() {
+            document.getElementById('recapModal').classList.remove('hidden');
+            renderRecapTable();
+        }
+
+        function closeRecapModal() {
+            document.getElementById('recapModal').classList.add('hidden');
+        }
+
+        function renderRecapTable() {
+            const tbody = document.getElementById('recapTableBody');
+            const tfoot = document.getElementById('recapTableTotal');
+            if(!tbody || !tfoot) return;
+            
+            const selectedYear = document.getElementById('yearFilter').value;
+            if(selectedYear === 'ALL') {
+                tbody.innerHTML = '<tr><td colspan="9" class="p-6 text-center text-gray-500 font-bold">⚠️ Veuillez sélectionner une année spécifique (en haut) pour voir le bilan comptable.</td></tr>';
+                tfoot.innerHTML = '';
+                const txtGlobal = document.getElementById('txtImpayesGlobal');
+                if (txtGlobal) txtGlobal.innerText = `-`;
+                return;
+            }
+            
+            const gPrat = document.getElementById('globalPraticienFilter') ? document.getElementById('globalPraticienFilter').value : 'ALL';
+            
+            let fses = fseList.filter(f => !f.isDefacture && f.date.substring(0,4) === selectedYear);
+            if (gPrat !== 'ALL') fses = fses.filter(f => f.praticien === gPrat);
+            
+            // On force l'itération sur les 12 mois de l'année
+            const months = ['01','02','03','04','05','06','07','08','09','10','11','12'];
+            const monthNames = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
+            
+            let totalROF = 0, totalROP = 0, totalRCF = 0, totalRCP = 0;
+            
+            tbody.innerHTML = '';
+            months.forEach((m, i) => {
+                let mFses = fses.filter(f => f.date.split('-')[1] === m);
+                let roF = 0, roP = 0, rcF = 0, rcP = 0;
+                
+                mFses.forEach(f => {
+                    roF += f.partRO; if(f.checkRO) roP += f.partRO;
+                    rcF += f.partRC; if(f.checkRC) rcP += f.partRC;
+                });
+                
+                totalROF += roF; totalROP += roP; totalRCF += rcF; totalRCP += rcP;
+                
+                let tf = roF + rcF;
+                let tp = roP + rcP;
+                let du = tf - tp;
+                let tx = tf > 0 ? ((du/tf)*100).toFixed(1) : '0.0';
+                
+                tbody.innerHTML += `
+                    <tr class="hover:bg-gray-50 transition border-b border-gray-100">
+                        <td class="p-2 font-bold bg-white sticky left-0 shadow-[1px_0_0_#eee]">${monthNames[i]}</td>
+                        <td class="p-2 text-right">${roF.toFixed(2)} €</td>
+                        <td class="p-2 text-right text-teal-700">${roP.toFixed(2)} €</td>
+                        <td class="p-2 text-right">${rcF.toFixed(2)} €</td>
+                        <td class="p-2 text-right text-indigo-700">${rcP.toFixed(2)} €</td>
+                        <td class="p-2 text-right font-bold bg-gray-50">${tf.toFixed(2)} €</td>
+                        <td class="p-2 text-right font-bold text-emerald-600 bg-gray-50">${tp.toFixed(2)} €</td>
+                        <td class="p-2 text-right font-bold text-rose-600 bg-gray-50">${du.toFixed(2)} €</td>
+                        <td class="p-2 text-right font-bold text-orange-600 bg-orange-50/50">${tx} %</td>
+                    </tr>
+                `;
+            });
+            
+            let globTF = totalROF + totalRCF;
+            let globTP = totalROP + totalRCP;
+            let globDu = globTF - globTP;
+            let globTx = globTF > 0 ? ((globDu/globTF)*100).toFixed(1) : '0.0';
+            
+            tfoot.innerHTML = `
+                <tr>
+                    <td class="p-2 font-black uppercase text-gray-800">TOTAL ANNUEL</td>
+                    <td class="p-2 text-right font-bold">${totalROF.toFixed(2)} €</td>
+                    <td class="p-2 text-right font-bold text-teal-700">${totalROP.toFixed(2)} €</td>
+                    <td class="p-2 text-right font-bold">${totalRCF.toFixed(2)} €</td>
+                    <td class="p-2 text-right font-bold text-indigo-700">${totalRCP.toFixed(2)} €</td>
+                    <td class="p-2 text-right font-black bg-gray-200">${globTF.toFixed(2)} €</td>
+                    <td class="p-2 text-right font-black text-emerald-700 bg-gray-200">${globTP.toFixed(2)} €</td>
+                    <td class="p-2 text-right font-black text-rose-700 bg-gray-200">${globDu.toFixed(2)} €</td>
+                    <td class="p-2 text-right font-black text-orange-800 bg-orange-100">${globTx} %</td>
+                </tr>
+            `;
+            
+            const txtGlobal = document.getElementById('txtImpayesGlobal');
+            if (txtGlobal) txtGlobal.innerText = `${globTx} %`;
+        }
+
+        // ==========================================
+        // SAUVEGARDE EN LIGNE (INLINE EDIT NOEMIE)
+        // ==========================================
+        async function inlineUpdateNoemie(id, field, value) {
+            const noemieIndex = noemieList.findIndex(n => n.id === id);
+            if (noemieIndex === -1) return;
+            
+            // Adaptation du nom de la colonne pour Supabase
+            let dbField = field;
+            if (field === 'encaisseLe') dbField = 'encaisse_le';
+            
+            let finalValue = value.trim();
+            if (finalValue === '') finalValue = null; 
+
+            // Mise à jour locale pour éviter de recharger toute la page
+            noemieList[noemieIndex][field] = finalValue || '';
+
+            // Envoi silencieux à Supabase
+            const { error } = await supabaseClient
+                .from('noemie')
+                .update({ [dbField]: finalValue })
+                .eq('id', id);
+                
+            if (error) {
+                alert("Erreur lors de la sauvegarde automatique : " + error.message);
+            }
         }
     </script>
 </body>
