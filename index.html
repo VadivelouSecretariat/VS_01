@@ -1464,15 +1464,15 @@
         const colorClasses = { 'vert': 'bg-emerald-100 text-emerald-800 border-emerald-300', 'bleu': 'bg-blue-100 text-blue-800 border-blue-300', 'rose': 'bg-pink-100 text-pink-800 border-pink-300', 'violet': 'bg-purple-100 text-purple-800 border-purple-300', 'orange': 'bg-orange-100 text-orange-800 border-orange-300' };
 
         // ==========================================
-        // MAPPERS DB <-> JS (AVEC GESTION DU CABINET)
+        // MAPPERS DB <-> JS (CORRIGÉS AVEC cabinet_id)
         // ==========================================
-        const mapFseToJs = (d) => ({ id: d.id, cabinet: d.cabinet, date: d.date, lot: d.lot, caisse: d.caisse, praticien: d.praticien, numFSE: d.num_fse, patient: d.patient, mutuelle: d.mutuelle, dre: d.dre, partRO: parseFloat(d.part_ro||0), partRC: parseFloat(d.part_rc||0), checkRO: d.check_ro, checkRC: d.check_rc, dateVirementRO: d.date_virement_ro||'', dateVirementRC: d.date_virement_rc||'', isLocked: d.is_locked, isRejet: d.is_rejet, motifRejet: d.motif_rejet||'', isDefacture: d.is_defacture, fseRemplacement: d.fse_remplacement||'', isDegrade: d.is_degrade });
+        const mapFseToJs = (d) => ({ id: d.id, cabinet: d.cabinet_id, date: d.date, lot: d.lot, caisse: d.caisse, praticien: d.praticien, numFSE: d.num_fse, patient: d.patient, mutuelle: d.mutuelle, dre: d.dre, partRO: parseFloat(d.part_ro||0), partRC: parseFloat(d.part_rc||0), checkRO: d.check_ro, checkRC: d.check_rc, dateVirementRO: d.date_virement_ro||'', dateVirementRC: d.date_virement_rc||'', isLocked: d.is_locked, isRejet: d.is_rejet, motifRejet: d.motif_rejet||'', isDefacture: d.is_defacture, fseRemplacement: d.fse_remplacement||'', isDegrade: d.is_degrade });
         
-        const mapFseToDb = (j) => ({ id: j.id, cabinet: j.cabinet || currentCabinet, date: j.date, lot: j.lot, caisse: j.caisse, praticien: j.praticien, num_fse: j.numFSE, patient: j.patient, mutuelle: j.mutuelle, dre: j.dre, part_ro: j.partRO, part_rc: j.partRC, check_ro: j.checkRO, check_rc: j.checkRC, date_virement_ro: j.dateVirementRO, date_virement_rc: j.dateVirementRC, is_locked: j.isLocked, is_rejet: j.isRejet, motif_rejet: j.motifRejet, is_defacture: j.isDefacture, fse_remplacement: j.fseRemplacement, is_degrade: j.isDegrade });
+        const mapFseToDb = (j) => ({ id: j.id, cabinet_id: j.cabinet || currentCabinet, date: j.date, lot: j.lot, caisse: j.caisse, praticien: j.praticien, num_fse: j.numFSE, patient: j.patient, mutuelle: j.mutuelle, dre: j.dre, part_ro: j.partRO, part_rc: j.partRC, check_ro: j.checkRO, check_rc: j.checkRC, date_virement_ro: j.dateVirementRO, date_virement_rc: j.dateVirementRC, is_locked: j.isLocked, is_rejet: j.isRejet, motif_rejet: j.motifRejet, is_defacture: j.isDefacture, fse_remplacement: j.fseRemplacement, is_degrade: j.isDegrade });
         
-        const mapNoemieToJs = (d) => ({ id: d.id, cabinet: d.cabinet, catNoemie: d.cat_noemie, catJustif: d.cat_justif, catReleve: d.cat_releve, praticien: d.praticien, dateNoemie: d.date_noemie, caisse: d.caisse, encaisseLe: d.encaisse_le||'', releve: d.releve||'', info: d.info||'', factures: d.factures, totalMontant: parseFloat(d.total_montant||0), dateImport: d.date_import });
+        const mapNoemieToJs = (d) => ({ id: d.id, cabinet: d.cabinet_id, catNoemie: d.cat_noemie, catJustif: d.cat_justif, catReleve: d.cat_releve, praticien: d.praticien, dateNoemie: d.date_noemie, caisse: d.caisse, encaisseLe: d.encaisse_le||'', releve: d.releve||'', info: d.info||'', factures: d.factures, totalMontant: parseFloat(d.total_montant||0), dateImport: d.date_import });
         
-        const mapNoemieToDb = (j) => ({ id: j.id, cabinet: j.cabinet || currentCabinet, cat_noemie: j.catNoemie, cat_justif: j.catJustif, cat_releve: j.catReleve, praticien: j.praticien, date_noemie: j.dateNoemie, caisse: j.caisse, encaisse_le: j.encaisseLe, releve: j.releve, info: j.info, factures: j.factures, total_montant: j.totalMontant, date_import: j.dateImport });
+        const mapNoemieToDb = (j) => ({ id: j.id, cabinet_id: j.cabinet || currentCabinet, cat_noemie: j.catNoemie, cat_justif: j.catJustif, cat_releve: j.catReleve, praticien: j.praticien, date_noemie: j.dateNoemie, caisse: j.caisse, encaisse_le: j.encaisseLe, releve: j.releve, info: j.info, factures: j.factures, total_montant: j.totalMontant, date_import: j.dateImport });
 
         // Fonction sécurisée pour le LocalStorage (séparé par cabinet)
         function getSafeArray(baseKey) {
@@ -1491,11 +1491,11 @@
             retroList = getSafeArray('retro_data');
             customYears = getSafeArray('custom_years');
             
-            // 2. Récupération Supabase (Filtrée par le cabinet actif)
+            // 2. Récupération Supabase (Filtrée par le cabinet actif avec cabinet_id)
             const [resFse, resNoemie, resPrat] = await Promise.all([
-                supabaseClient.from('fse').select('*').eq('cabinet', currentCabinet),
-                supabaseClient.from('noemie').select('*').eq('cabinet', currentCabinet),
-                supabaseClient.from('praticiens_suivi').select('*').eq('cabinet', currentCabinet)
+                supabaseClient.from('fse').select('*').eq('cabinet_id', currentCabinet),
+                supabaseClient.from('noemie').select('*').eq('cabinet_id', currentCabinet),
+                supabaseClient.from('praticiens_suivi').select('*').eq('cabinet', currentCabinet) // Garde 'cabinet' si tu as appelé la colonne ainsi tout à l'heure, sinon mets 'cabinet_id'
             ]);
 
             fseList = resFse.data ? resFse.data.map(mapFseToJs) : [];
@@ -1505,14 +1505,7 @@
             if (resPrat.data && resPrat.data.length > 0) {
                 praticiensList = resPrat.data;
             } else {
-                // Migration locale si la base est vide pour ce cabinet
-                let localPrats = getSafeArray('praticiens_data_v2');
-                if (localPrats.length > 0) {
-                    praticiensList = localPrats.map((p, i) => ({ id: 'prat_' + Date.now() + '_' + i, cabinet: currentCabinet, name: p.name, color: p.color || 'vert' }));
-                    await supabaseClient.from('praticiens_suivi').upsert(praticiensList);
-                } else {
-                    praticiensList = [{ id: '1_'+currentCabinet, cabinet: currentCabinet, name: 'Praticien 1', color: 'vert' }];
-                }
+                praticiensList = [{ id: generateUUID(), cabinet: currentCabinet, name: 'Praticien 1', color: 'vert' }];
             }
 
             // 3. Mise à jour complète de l'interface
