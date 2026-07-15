@@ -78,7 +78,6 @@
                     <div class="flex bg-teal-800 rounded-lg p-1 items-center overflow-x-auto">
                         <button onclick="switchPage('dashboardPage')" id="navDashboard" class="px-3 py-1.5 text-sm font-semibold rounded bg-teal-600 text-white transition whitespace-nowrap">Factures</button>
                         <button onclick="switchPage('noemiePage')" id="navNoemie" class="px-3 py-1.5 text-sm font-semibold rounded text-teal-200 hover:text-white hover:bg-teal-600/50 transition whitespace-nowrap">Retours NOEMIE</button>
-                        <button onclick="switchPage('retrosPage')" id="navRetros" class="hidden px-3 py-1.5 text-sm font-semibold rounded text-teal-200 hover:text-white hover:bg-teal-600/50 transition whitespace-nowrap">Rétros</button>
                         <button onclick="openImpayesModal()" class="px-3 py-1.5 text-sm font-semibold rounded text-rose-200 hover:text-white hover:bg-rose-600/50 transition bg-rose-700/50 ml-1 whitespace-nowrap">⚠️ Impayés</button>
                     </div>
                 </h1>
@@ -268,44 +267,7 @@
                     </div>
                 </section>
             </div>
-
-            <div id="retrosPage" class="page-hidden space-y-4">
-                <section class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden relative">
-                    <div class="p-3 border-b border-gray-200 flex justify-between items-center bg-gray-50 z-30 relative">
-                        <div>
-                            <h3 class="text-sm font-bold text-gray-700">💼 Gestion des Rétrocessions</h3>
-                            <p class="text-xs text-gray-500">Suivi des paiements Titulaire / Remplaçant</p>
-                        </div>
-                        <button onclick="openRetroBilanModal()" class="bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold px-3 py-1.5 rounded transition shadow flex items-center gap-1">
-                            📊 Bilan & Régularisation
-                        </button>
-                    </div>
-                    <div class="w-full overflow-y-auto table-scroll relative">
-                        <table class="w-full text-left border-collapse table-auto text-xs min-w-[950px]">
-                            <thead class="bg-gray-100 text-gray-600 uppercase font-semibold sticky top-0 z-20 shadow-[0_1px_2px_rgba(0,0,0,0.1)]">
-                                <tr>
-                                    <th class="p-2 w-28 bg-gray-100">Période</th>
-                                    <th class="p-2 w-24 bg-gray-100">Praticien</th>
-                                    <th class="p-2 text-center w-16 bg-gray-100">Taux %</th>
-                                    <th class="p-2 text-right w-24 bg-gray-100">Mt Kiné</th>
-                                    <th class="p-2 text-right w-24 bg-gray-100">Mt Rempl.</th>
-                                    <th class="p-2 text-right w-24 bg-purple-50 text-purple-800">Total FSE</th>
-                                    <th class="p-2 text-right w-24 bg-gray-100">Total Payé</th>
-                                    <th class="p-2 text-center w-24 bg-gray-100">Date Paie.</th>
-                                    <th class="p-2 text-right w-24 bg-gray-100">Solde</th>
-                                    <th class="p-2 text-center w-24 bg-gray-100">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody id="retrosTableBody" class="text-[12px] divide-y divide-gray-200">
-                                </tbody>
-                        </table>
-                    </div>
-                    <div id="retroEmptyState" class="hidden text-center py-8 text-gray-400 w-full bg-white relative z-0">
-                        Aucune rétrocession enregistrée pour cette sélection.
-                    </div>
-                </section>
-            </div>
-
+           
         </main>
 
         <div id="fseModal" class="hidden fixed inset-0 z-50 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center p-4">
