@@ -94,9 +94,12 @@
                     
                     <div class="w-px h-6 bg-teal-500 mx-1"></div> 
 
-                    <select id="globalPraticienFilter" class="bg-teal-800 text-white border border-teal-600 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 font-semibold shadow-inner">
-                        <option value="ALL">👨‍⚕️ Tous les Praticiens</option>
-                    </select>
+                    <div class="flex items-center gap-1 bg-teal-800 border border-teal-600 rounded p-0.5">
+                        <select id="globalPraticienFilter" class="bg-teal-800 text-white rounded px-2 py-1 text-sm focus:outline-none font-semibold cursor-pointer border-none bg-transparent">
+                            <option value="ALL">👨‍⚕️ Tous les Praticiens</option>
+                        </select>
+                        <button onclick="openSettingsModal()" title="Ajouter ou gérer les praticiens" class="text-teal-200 hover:text-white hover:bg-teal-700 px-2 py-1 rounded transition text-sm font-bold">+</button>
+                    </div>
 
                     <div class="flex items-center gap-1 bg-teal-800 border border-teal-600 rounded p-0.5">
                         <select id="yearFilter" class="bg-teal-800 text-white rounded px-2 py-1 text-sm focus:outline-none font-semibold cursor-pointer">
