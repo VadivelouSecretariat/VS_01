@@ -3511,70 +3511,88 @@
             const fse = fseList.find(f => f.id === fseId);
             if (!fse) return;
             
-            // Fonction utilitaire pour gérer les dates d'encaissement vides ou invalides
-            const formatDateVirement = (dateStr) => {
-                if (!dateStr || dateStr.trim() === '') return '';
-                const d = new Date(dateStr);
-                return isNaN(d.getTime()) ? '' : ` le ${d.toLocaleDateString('fr-FR')}`;
-            };
+            // Calcul des montants et statuts (0€ = considéré comme payé/soldé)
+            const isROPaye = fse.checkRO || fse.partRO === 0;
+            const isRCPaye = fse.checkRC || fse.partRC === 0;
+            const resteAPayer = (!isROPaye ? fse.partRO : 0) + (!isRCPaye ? fse.partRC : 0);
 
-            // Gestion intelligente des statuts (affiche "Rien à recouvrer" si le montant est de 0€)
-            let statusRO = "";
-            if (fse.partRO === 0) {
-                statusRO = `<span class="text-gray-500 font-bold text-[11px] bg-gray-100 px-2 py-1 rounded border border-gray-200">Rien à recouvrer</span>`;
-            } else {
-                statusRO = fse.checkRO 
-                    ? `<span class="text-emerald-700 font-bold text-[11px] bg-emerald-50 px-2 py-1 rounded border border-emerald-200">Payé${formatDateVirement(fse.dateVirementRO)}</span>` 
-                    : `<span class="text-rose-600 font-bold text-[11px] bg-rose-50 px-2 py-1 rounded border border-rose-200">En attente</span>`;
-            }
+            // Badges
+            const badgeRO = isROPaye 
+                ? `<span class="bg-emerald-100 text-emerald-600 font-black text-[10px] px-2.5 py-1 rounded uppercase tracking-wider">Payé</span>` 
+                : `<span class="bg-rose-100 text-rose-600 font-black text-[10px] px-2.5 py-1 rounded uppercase tracking-wider">En attente</span>`;
+                
+            const badgeRC = isRCPaye 
+                ? `<span class="bg-emerald-100 text-emerald-600 font-black text-[10px] px-2.5 py-1 rounded uppercase tracking-wider">Payé</span>` 
+                : `<span class="bg-rose-100 text-rose-600 font-black text-[10px] px-2.5 py-1 rounded uppercase tracking-wider">En attente</span>`;
 
-            let statusRC = "";
-            if (fse.partRC === 0) {
-                statusRC = `<span class="text-gray-500 font-bold text-[11px] bg-gray-100 px-2 py-1 rounded border border-gray-200">Rien à recouvrer</span>`;
-            } else {
-                statusRC = fse.checkRC 
-                    ? `<span class="text-emerald-700 font-bold text-[11px] bg-emerald-50 px-2 py-1 rounded border border-emerald-200">Payé${formatDateVirement(fse.dateVirementRC)}</span>` 
-                    : `<span class="text-rose-600 font-bold text-[11px] bg-rose-50 px-2 py-1 rounded border border-rose-200">En attente</span>`;
-            }
-            
-            // Affichage avec une grille asymétrique (1/3 pour les libellés, 2/3 pour les valeurs) pour un meilleur rendu
+            // Style de la boîte de total en bas (Rouge si reste à payer, Vert si soldé)
+            const boxClass = resteAPayer > 0 ? "bg-rose-50 border border-rose-200" : "bg-emerald-50 border border-emerald-200";
+            const boxTextLeftClass = resteAPayer > 0 ? "text-rose-800" : "text-emerald-800";
+            const boxTextRightClass = resteAPayer > 0 ? "text-rose-700" : "text-emerald-700";
+            const boxLabel = resteAPayer > 0 ? "RESTE À PAYER" : "FACTURE SOLDÉE";
+
             const html = `
-                <div class="grid grid-cols-[130px_1fr] gap-y-3 gap-x-4 items-start">
-                    <div class="text-[11px] text-gray-500 uppercase font-bold text-right pt-0.5">N° FSE</div>
-                    <div class="font-mono font-bold text-teal-700 text-lg leading-none">${fse.numFSE}</div>
-                    
-                    <div class="text-[11px] text-gray-500 uppercase font-bold text-right pt-0.5">Date du lot</div>
-                    <div class="font-medium text-gray-800">${new Date(fse.date).toLocaleDateString('fr-FR')} <span class="text-gray-500 text-sm ml-1">(Lot ${fse.lot || '-'})</span></div>
-                    
-                    <div class="text-[11px] text-gray-500 uppercase font-bold text-right pt-0.5">Praticien</div>
-                    <div class="font-medium text-gray-800">${fse.praticien}</div>
-                    
-                    <div class="text-[11px] text-gray-500 uppercase font-bold text-right pt-0.5">Patient</div>
-                    <div class="font-black text-gray-900 text-base leading-none">${fse.patient}</div>
-                    
-                    <div class="col-span-2 border-t border-gray-100 my-1"></div>
-                    
-                    <div class="text-[11px] text-gray-500 uppercase font-bold text-right pt-0.5">Caisse (RO)</div>
-                    <div class="font-medium text-gray-800">${fse.caisse || '-'}</div>
-                    
-                    <div class="text-[11px] text-gray-500 uppercase font-bold text-right pt-0.5">Part RO</div>
-                    <div>
-                        <div class="font-mono font-bold text-gray-900 text-base mb-1.5">${fse.partRO.toFixed(2)} €</div>
-                        <div>${statusRO}</div>
+                <div class="flex flex-col gap-4 p-1">
+                    <!-- Patient -->
+                    <div class="flex justify-between items-center mt-2">
+                        <div class="text-[11px] font-bold text-gray-400 uppercase tracking-wide">Patient</div>
+                        <div class="text-xl font-black text-gray-800">${fse.patient}</div>
                     </div>
-                    
-                    <div class="col-span-2 border-t border-gray-100 my-1"></div>
-                    
-                    <div class="text-[11px] text-gray-500 uppercase font-bold text-right pt-0.5">Mutuelle (RC)</div>
-                    <div>
-                        <div class="font-medium text-gray-800">${fse.mutuelle || '-'}</div>
-                        <div class="text-[10px] text-gray-400 mt-0.5 font-bold">DRE : ${fse.dre || '-'}</div>
+
+                    <hr class="border-gray-100 my-1">
+
+                    <!-- Date & Praticien -->
+                    <div class="flex justify-between items-start">
+                        <div>
+                           <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-1">Date</div>
+                           <div class="font-bold text-gray-800 text-[15px]">${new Date(fse.date).toLocaleDateString('fr-FR')}</div>
+                        </div>
+                        <div class="text-right">
+                           <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-1">Praticien</div>
+                           <div class="font-bold text-gray-800 text-[15px]">${fse.praticien}</div>
+                        </div>
                     </div>
-                    
-                    <div class="text-[11px] text-gray-500 uppercase font-bold text-right pt-0.5">Part RC</div>
-                    <div>
-                        <div class="font-mono font-bold text-gray-900 text-base mb-1.5">${fse.partRC.toFixed(2)} €</div>
-                        <div>${statusRC}</div>
+
+                    <!-- Encart Bleu : Infos de la facture -->
+                    <div class="bg-indigo-50/40 border border-indigo-100/60 rounded-xl p-4 flex flex-col gap-5 mt-2 shadow-sm">
+                        <div class="flex justify-between items-start">
+                            <div>
+                               <div class="text-[10px] font-bold text-indigo-400 uppercase tracking-wider mb-1">N° FSE</div>
+                               <div class="font-mono text-indigo-700 font-bold text-[15px]">${fse.numFSE}</div>
+                            </div>
+                            <div class="text-right">
+                               <div class="text-[10px] font-bold text-indigo-400 uppercase tracking-wider mb-1">Lot</div>
+                               <div class="font-mono text-gray-700 font-bold">${fse.lot || '-'}</div>
+                            </div>
+                        </div>
+                        <div class="flex justify-between items-start">
+                            <div>
+                               <div class="text-[10px] font-bold text-indigo-400 uppercase tracking-wider mb-1">Caisse</div>
+                               <div class="font-bold text-gray-700 uppercase">${fse.caisse || '-'}</div>
+                            </div>
+                            <div class="text-right">
+                               <div class="text-[10px] font-bold text-indigo-400 uppercase tracking-wider mb-1">Mutuelle</div>
+                               <div class="font-bold text-gray-700 uppercase">${fse.mutuelle || '-'}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Lignes des montants -->
+                    <div class="flex flex-col gap-4 px-1 mt-3">
+                        <div class="flex justify-between items-center">
+                            <div class="font-bold text-gray-600 text-sm">Part RO <span class="font-medium text-gray-400 ml-1">(${fse.partRO.toFixed(2)} €)</span></div>
+                            <div>${badgeRO}</div>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <div class="font-bold text-gray-600 text-sm">Part RC <span class="font-medium text-gray-400 ml-1">(${fse.partRC.toFixed(2)} €)</span></div>
+                            <div>${badgeRC}</div>
+                        </div>
+                    </div>
+
+                    <!-- Reste à payer -->
+                    <div class="${boxClass} rounded-xl p-4 flex justify-between items-center mt-3 mb-1 shadow-sm">
+                        <div class="text-[11px] font-bold ${boxTextLeftClass} uppercase tracking-wider">${boxLabel}</div>
+                        <div class="text-xl font-black ${boxTextRightClass}">${resteAPayer.toFixed(2)} €</div>
                     </div>
                 </div>
             `;
