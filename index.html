@@ -1472,7 +1472,23 @@
         
         const mapNoemieToJs = (d) => ({ id: d.id, cabinet: d.cabinet_id, catNoemie: d.cat_noemie, catJustif: d.cat_justif, catReleve: d.cat_releve, praticien: d.praticien, dateNoemie: d.date_noemie, caisse: d.caisse, encaisseLe: d.encaisse_le||'', releve: d.releve||'', info: d.info||'', factures: d.factures, totalMontant: parseFloat(d.total_montant||0), dateImport: d.date_import });
         
-        const mapNoemieToDb = (j) => ({ id: j.id, cabinet_id: j.cabinet || currentCabinet, cat_noemie: j.catNoemie, cat_justif: j.catJustif, cat_releve: j.catReleve, praticien: j.praticien, date_noemie: j.dateNoemie, caisse: j.caisse, encaisse_le: j.encaisseLe, releve: j.releve, info: j.info, factures: j.factures, total_montant: j.totalMontant, date_import: j.dateImport });
+        const mapNoemieToDb = (j) => ({ 
+            id: j.id, 
+            cabinet_id: j.cabinet || currentCabinet, 
+            cat_noemie: j.catNoemie, 
+            cat_justif: j.catJustif, 
+            cat_releve: j.catReleve, 
+            praticien: j.praticien, 
+            date_noemie: j.dateNoemie, 
+            caisse: j.caisse, 
+            // CORRECTION : Si la date est vide, on envoie 'null' au lieu de ""
+            encaisse_le: j.encaisseLe && j.encaisseLe !== "" ? j.encaisseLe : null, 
+            releve: j.releve, 
+            info: j.info, 
+            factures: j.factures, 
+            total_montant: j.totalMontant, 
+            date_import: j.dateImport 
+        });
 
         // Fonction sécurisée pour le LocalStorage (séparé par cabinet)
         function getSafeArray(baseKey) {
