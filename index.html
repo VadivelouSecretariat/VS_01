@@ -1482,39 +1482,68 @@
         }
 
         // ==========================================
-        // CHARGEMENT DES DONNÉES PAR CABINET
+        // UTILITAIRES GLOBAUX
+        // ==========================================
+        // Fonction sécurisée pour générer un ID unique (Déplacée ici pour éviter les crashs au rechargement)
+        const generateUUID = () => {
+            if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
+            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                var r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+                return v.toString(16);
+            });
+        };
+
+        // ==========================================
+        // CHARGEMENT DES DONNÉES PAR CABINET (SÉCURISÉ)
         // ==========================================
         async function loadDataForCabinet() {
-            document.body.style.cursor = 'wait';
-            
-            // 1. Récupération Locale (Rétros, Années custom, Praticiens isolés par cabinet)
-            retroList = getSafeArray('retro_data');
-            customYears = getSafeArray('custom_years');
-            
-            // 2. Récupération Supabase (Filtrée par le cabinet actif avec cabinet_id)
-            const [resFse, resNoemie, resPrat] = await Promise.all([
-                supabaseClient.from('fse').select('*').eq('cabinet_id', currentCabinet),
-                supabaseClient.from('noemie').select('*').eq('cabinet_id', currentCabinet),
-                supabaseClient.from('praticiens_suivi').select('*').eq('cabinet', currentCabinet) // Garde 'cabinet' si tu as appelé la colonne ainsi tout à l'heure, sinon mets 'cabinet_id'
-            ]);
+            try {
+                document.body.style.cursor = 'wait';
+                
+                // 1. Réinitialisation des filtres et des listes pour éviter les "fantômes" d'un cabinet à l'autre
+                fseList = []; noemieList = []; praticiensList = [];
+                ['searchDate','searchPraticien','searchLot','searchNumFSE','searchPatient','searchMutuelle'].forEach(id => { const el = document.getElementById(id); if(el) el.value=''; });
+                ['sNoemieDate','sNoemiePraticien','sNoemieCaisse','sNoemieFSE','sNoemieMontant','sNoemieEncaisse','sNoemieReleve','sNoemieInfo'].forEach(id => { const el = document.getElementById(id); if(el) el.value=''; });
+                const chkRO = document.getElementById('searchCheckRO'), chkRC = document.getElementById('searchCheckRC');
+                if(chkRO) chkRO.value = 'ALL'; if(chkRC) chkRC.value = 'ALL';
 
-            fseList = resFse.data ? resFse.data.map(mapFseToJs) : [];
-            noemieList = resNoemie.data ? resNoemie.data.map(mapNoemieToJs) : [];
-            
-            // Gestion des praticiens
-            if (resPrat.data && resPrat.data.length > 0) {
-                praticiensList = resPrat.data;
-            } else {
-                praticiensList = [{ id: generateUUID(), cabinet: currentCabinet, name: 'Praticien 1', color: 'vert' }];
+                // 2. Récupération Locale (Rétros, Années custom)
+                retroList = getSafeArray('retro_data');
+                customYears = getSafeArray('custom_years');
+                
+                // 3. Récupération Supabase
+                const [resFse, resNoemie, resPrat] = await Promise.all([
+                    supabaseClient.from('fse').select('*').eq('cabinet_id', currentCabinet),
+                    supabaseClient.from('noemie').select('*').eq('cabinet_id', currentCabinet),
+                    supabaseClient.from('praticiens_suivi').select('*').eq('cabinet', currentCabinet)
+                ]);
+
+                if (resFse.error) console.error("Erreur FSE :", resFse.error);
+                if (resNoemie.error) console.error("Erreur NOEMIE :", resNoemie.error);
+                if (resPrat.error) console.error("Erreur Praticiens :", resPrat.error);
+
+                fseList = resFse.data ? resFse.data.map(mapFseToJs) : [];
+                noemieList = resNoemie.data ? resNoemie.data.map(mapNoemieToJs) : [];
+                
+                if (resPrat.data && resPrat.data.length > 0) {
+                    praticiensList = resPrat.data;
+                } else {
+                    // Si aucun praticien, on en crée un par défaut avec un vrai UUID
+                    praticiensList = [{ id: generateUUID(), cabinet: currentCabinet, name: 'Praticien 1', color: 'vert' }];
+                }
+
+                // 4. Mise à jour de l'interface
+                populateSelects();
+                updateYearsDatalist(); 
+                updateDatalists(); 
+                triggerAllRenders();
+                
+            } catch (err) {
+                console.error("Crash lors du chargement du cabinet :", err);
+                alert("Une erreur est survenue lors du chargement des données. Veuillez réessayer.");
+            } finally {
+                document.body.style.cursor = 'default';
             }
-
-            // 3. Mise à jour complète de l'interface
-            populateSelects();
-            updateYearsDatalist(); 
-            updateDatalists(); 
-            triggerAllRenders();
-            
-            document.body.style.cursor = 'default';
         }
 
         // ==========================================
@@ -2730,34 +2759,63 @@
 
             tbody.innerHTML = '';
             filtered.forEach(n => {
-                let typeBadge = n.catReleve ? '<span class="bg-amber-100 text-amber-800 border border-amber-300 text-[9px] px-1.5 py-0.5 rounded ml-1">Relevé</span>' : (n.catJustif ? '<span class="bg-gray-100 text-gray-800 border border-gray-300 text-[9px] px-1.5 py-0.5 rounded ml-1">Justif</span>' : '<span class="bg-teal-100 text-teal-800 border border-teal-300 text-[9px] px-1.5 py-0.5 rounded ml-1">Noemie</span>');
+                let typeBadge = '';
+                if (n.catReleve) typeBadge = '<span class="bg-amber-100 text-amber-800 border border-amber-300 text-[9px] px-2 py-0.5 rounded-full font-bold shadow-sm">RELEVÉ</span>';
+                else if (n.catJustif) typeBadge = '<span class="bg-gray-100 text-gray-800 border border-gray-300 text-[9px] px-2 py-0.5 rounded-full font-bold shadow-sm">JUSTIF</span>';
+                else typeBadge = '<span class="bg-teal-100 text-teal-800 border border-teal-300 text-[9px] px-2 py-0.5 rounded-full font-bold shadow-sm">NOEMIE</span>';
+                
                 const pBadge = getPraticienBadge(n.praticien);
+                let numReleveAffichage = n.releve !== '-' ? n.releve : `<button onclick="openMiniReleveModal('${n.id}')" class="text-xs bg-gray-50 hover:bg-teal-100 text-gray-500 hover:text-teal-700 px-2 py-0.5 rounded transition shadow-sm border border-gray-200">+ Relevé</button>`;
                 
-                // L'AFFICHAGE "SOUS-LISTE" COMME DANS LA V2
-                let htmlFse = `<div class="flex flex-col gap-1 w-full min-w-[140px] py-1">` + 
-                    n.factures.map(f => `
-                        <div class="flex justify-between items-center bg-white px-2 py-1 border border-teal-100 rounded text-[10px] font-mono shadow-sm">
-                            <span class="text-teal-900">${f.fse}</span>
-                            <span class="font-bold text-indigo-700">${f.montant.toFixed(2)}€</span>
-                        </div>
-                    `).join('') + 
-                `</div>`;
-                
-                let numReleveAffichage = n.releve !== '-' ? n.releve : `<button onclick="openMiniReleveModal('${n.id}')" class="text-xs bg-gray-100 hover:bg-teal-100 text-gray-500 hover:text-teal-700 px-2 py-0.5 rounded transition shadow-sm border border-gray-200" title="Ajouter un N° de relevé">+ Relevé</button>`;
-                
-                const tr = document.createElement('tr'); tr.className = "border-b border-gray-100 hover:bg-teal-50/50 transition align-top";
+                // --- LIGNE PRINCIPALE DU RETOUR ---
+                const tr = document.createElement('tr');
+                tr.className = "bg-white border-t-[3px] border-gray-100 hover:bg-teal-50/20 transition";
                 tr.innerHTML = `
-                    <td class="p-2 font-medium text-gray-800 pt-3"><div class="flex items-center">${new Date(n.dateNoemie).toLocaleDateString('fr-FR')} ${typeBadge}</div></td>
-                    <td class="p-2 truncate max-w-[90px] pt-3">${pBadge}</td>
-                    <td class="p-2 font-semibold text-teal-700 pt-3">${n.caisse}</td>
-                    <td class="p-2 bg-teal-50/30">${htmlFse}</td>
-                    <td class="p-2 text-right font-bold text-indigo-700 font-mono pt-3">${n.totalMontant.toFixed(2)}€</td>
-                    <td class="p-2 text-center text-gray-600 pt-3">${n.encaisseLe ? new Date(n.encaisseLe).toLocaleDateString('fr-FR') : '-'}</td>
-                    <td class="p-2 text-gray-700 font-mono text-[10px] pt-3">${numReleveAffichage}</td>
-                    <td class="p-2 text-gray-600 italic text-[10px] truncate max-w-[120px] pt-3" title="${n.info}">${n.info||'-'}</td>
-                    <td class="p-2 text-center pt-3"><button onclick="editNoemie('${n.id}')" class="text-blue-500 hover:text-blue-700 mx-1">✎</button><button onclick="deleteNoemie('${n.id}')" class="text-rose-500 hover:text-rose-700 mx-1">🗑</button></td>
+                    <td class="p-3 align-top">
+                        <div class="flex flex-col gap-1.5 items-start">
+                            ${typeBadge}
+                            <span class="font-bold text-gray-800">${new Date(n.dateNoemie).toLocaleDateString('fr-FR')}</span>
+                        </div>
+                    </td>
+                    <td class="p-3 align-top">${pBadge}</td>
+                    <td class="p-3 font-bold text-gray-800 align-top">${n.caisse}</td>
+                    <td class="p-3 align-top text-center"><span class="bg-gray-100 text-gray-600 px-2.5 py-1 rounded-md text-[10px] font-bold border border-gray-200 shadow-sm">${n.factures.length} FSE</span></td>
+                    <td class="p-3 text-left font-black text-teal-600 text-sm align-top">${n.totalMontant.toFixed(2)} €</td>
+                    <td class="p-3 text-center align-top">${n.encaisseLe ? new Date(n.encaisseLe).toLocaleDateString('fr-FR') : '-'}</td>
+                    <td class="p-3 align-top text-center text-gray-700 font-mono text-[11px]">${numReleveAffichage}</td>
+                    <td class="p-3 text-gray-500 italic text-[10px] align-top">${n.info||'-'}</td>
+                    <td class="p-3 text-center align-top">
+                        <button onclick="editNoemie('${n.id}')" class="text-amber-500 hover:text-amber-700 mx-1 text-sm outline-none" title="Modifier">✏️</button>
+                        <button onclick="deleteNoemie('${n.id}')" class="text-gray-400 hover:text-rose-600 mx-1 text-sm outline-none" title="Supprimer">🗑️</button>
+                    </td>
                 `;
                 tbody.appendChild(tr);
+
+                // --- SOUS-LIGNES POUR CHAQUE FSE (façon tiroir) ---
+                n.factures.forEach((fac, idx) => {
+                    let fseObj = fseList.find(f => f.numFSE === fac.fse && f.praticien === n.praticien);
+                    if(!fseObj) fseObj = fseList.find(f => f.numFSE === fac.fse); // Fallback si le praticien diffère légèrement
+                    
+                    let patientName = fseObj ? fseObj.patient.toUpperCase() : 'INCONNU';
+                    let totalFse = fseObj ? (fseObj.partRO + fseObj.partRC).toFixed(2) : fac.montant.toFixed(2);
+                    
+                    let isLast = idx === n.factures.length - 1;
+                    let borderClass = isLast ? "border-b border-gray-100" : "border-b border-gray-50 border-dashed";
+                    
+                    const subTr = document.createElement('tr');
+                    subTr.className = `bg-white hover:bg-gray-50/50 transition ${borderClass}`;
+                    subTr.innerHTML = `
+                        <td colspan="3" class="py-2 pr-4 text-right text-gray-500 font-semibold text-[10px] align-middle">
+                            ↳ ${patientName} - FSE N°
+                        </td>
+                        <td class="py-2 text-center font-bold text-gray-900 text-[11px] align-middle">${fac.fse}</td>
+                        <td class="py-2 text-left font-bold text-emerald-600 text-[11px] align-middle">
+                            ${fac.montant.toFixed(2)} <span class="text-gray-400 font-normal text-[9px]">/ ${totalFse}</span>
+                        </td>
+                        <td colspan="4" class="py-2"></td>
+                    `;
+                    tbody.appendChild(subTr);
+                });
             });
         }
 
@@ -2912,15 +2970,7 @@
             const rows = document.querySelectorAll('#settingsPraticiensContainer > div');
             let newPrats = [];
             
-            // Fonction sécurisée pour générer un UUID valide (même hors ligne ou hors https)
-            const generateUUID = () => {
-                if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
-                return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-                    var r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
-                    return v.toString(16);
-                });
-            };
-            
+                      
             rows.forEach((row) => {
                 const name = row.querySelector('.set-prat-name').value.trim();
                 const color = row.querySelector('.set-prat-color').value;
