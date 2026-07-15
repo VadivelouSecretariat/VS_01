@@ -2906,21 +2906,32 @@
             const rows = document.querySelectorAll('#settingsPraticiensContainer > div');
             let newPrats = [];
             
+            // Fonction sécurisée pour générer un UUID valide (même hors ligne ou hors https)
+            const generateUUID = () => {
+                if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
+                return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                    var r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+                    return v.toString(16);
+                });
+            };
+            
             rows.forEach((row) => {
                 const name = row.querySelector('.set-prat-name').value.trim();
                 const color = row.querySelector('.set-prat-color').value;
                 if(name) {
                     let existing = praticiensList.find(p => p.name === name);
+                    
+                    // Si c'est un praticien existant on garde son ID, sinon on en crée un vrai
+                    let pratId = (existing && existing.id && existing.id.includes('-')) 
+                                 ? existing.id 
+                                 : generateUUID();
+
                     let pratData = {
+                        id: pratId,
                         cabinet: currentCabinet,
                         name: name,
                         color: color
                     };
-                    
-                    // Si c'est un praticien existant avec un vrai UUID, on le conserve
-                    if (existing && existing.id && existing.id.includes('-')) {
-                        pratData.id = existing.id;
-                    }
                     
                     newPrats.push(pratData);
                 }
@@ -2936,7 +2947,7 @@
             // Suppression des anciens puis insertion des nouveaux
             await supabaseClient.from('praticiens_suivi').delete().eq('cabinet', currentCabinet);
             
-            // On insère et on demande à Supabase de nous renvoyer les données créées (avec les nouveaux UUIDs)
+            // Insertion
             const { data, error } = await supabaseClient.from('praticiens_suivi').insert(newPrats).select();
             
             document.body.style.cursor = 'default';
@@ -2944,7 +2955,7 @@
             if (error) {
                 alert("Erreur de sauvegarde des praticiens : " + error.message);
             } else {
-                praticiensList = data || newPrats; // Mise à jour avec les vrais UUIDs
+                praticiensList = data || newPrats;
                 populateSelects(); 
                 render(); 
                 renderNoemieTable(); 
