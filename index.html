@@ -2728,7 +2728,11 @@
             filtered.forEach(n => {
                 let typeBadge = n.catReleve ? '<span class="bg-amber-100 text-amber-800 border border-amber-300 text-[9px] px-1.5 py-0.5 rounded ml-1">Relevé</span>' : (n.catJustif ? '<span class="bg-gray-100 text-gray-800 border border-gray-300 text-[9px] px-1.5 py-0.5 rounded ml-1">Justif</span>' : '<span class="bg-teal-100 text-teal-800 border border-teal-300 text-[9px] px-1.5 py-0.5 rounded ml-1">Noemie</span>');
                 const pBadge = getPraticienBadge(n.praticien);
-                let htmlFse = `<div class="flex flex-wrap gap-1 max-h-[40px] overflow-y-auto custom-scrollbar">` + n.factures.map(f => `<span class="bg-white px-1 py-0.5 border border-teal-200 rounded text-[9px] font-mono text-teal-800">${f.fse} <span class="opacity-50">(${f.montant}€)</span></span>`).join('') + `</div>`;
+                
+                // CORRECTION : Ajout de whitespace-nowrap, augmentation de la hauteur max, et espacement optimisé
+                let htmlFse = `<div class="flex flex-wrap gap-1.5 max-h-[72px] overflow-y-auto pr-1 custom-scrollbar">` + 
+                    n.factures.map(f => `<span class="bg-white px-1.5 py-0.5 border border-teal-200 rounded text-[9.5px] font-mono text-teal-800 whitespace-nowrap shadow-sm">${f.fse} <span class="opacity-60">(${f.montant}€)</span></span>`).join('') + 
+                `</div>`;
                 
                 let numReleveAffichage = n.releve !== '-' ? n.releve : `<button onclick="openMiniReleveModal('${n.id}')" class="text-xs bg-gray-100 hover:bg-teal-100 text-gray-500 hover:text-teal-700 px-2 py-0.5 rounded transition shadow-sm border border-gray-200" title="Ajouter un N° de relevé">+ Relevé</button>`;
                 
@@ -2737,7 +2741,8 @@
                     <td class="p-2 font-medium text-gray-800"><div class="flex items-center">${new Date(n.dateNoemie).toLocaleDateString('fr-FR')} ${typeBadge}</div></td>
                     <td class="p-2 truncate max-w-[90px]">${pBadge}</td>
                     <td class="p-2 font-semibold text-teal-700">${n.caisse}</td>
-                    <td class="p-2">${htmlFse}</td>
+                    <!-- CORRECTION : Ajout d'une largeur minimale (min-w-[180px]) pour forcer la colonne à s'élargir -->
+                    <td class="p-2 min-w-[180px]">${htmlFse}</td>
                     <td class="p-2 text-right font-bold text-indigo-700 font-mono">${n.totalMontant.toFixed(2)}€</td>
                     <td class="p-2 text-center text-gray-600">${n.encaisseLe ? new Date(n.encaisseLe).toLocaleDateString('fr-FR') : '-'}</td>
                     <td class="p-2 text-gray-700 font-mono text-[10px]">${numReleveAffichage}</td>
