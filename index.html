@@ -3253,7 +3253,6 @@
             
             const searchTxt = (document.getElementById('sImpayesText') ? document.getElementById('sImpayesText').value.toLowerCase() : '');
             
-            // On récupère toutes les factures non soldées et non défacturées
             let impayes = fseList.filter(f => !f.isDefacture && !f.isLocked && ((f.partRO > 0 && !f.checkRO) || (f.partRC > 0 && !f.checkRC)));
             
             if (searchTxt) {
@@ -3287,9 +3286,11 @@
                     <tr class="hover:bg-rose-50 transition border-b border-gray-100">
                         <td class="p-3">${new Date(f.date).toLocaleDateString('fr-FR')}</td>
                         <td class="p-3">${getPraticienBadge(f.praticien)}</td>
-                        <td class="p-3 font-bold text-gray-800">${f.patient}</td>
-                        <td class="p-3 text-center font-mono">${f.numFSE}</td>
-                        <td class="p-3 truncate max-w-[150px]">${f.mutuelle || f.caisse}</td>
+                        <!-- Clic sur le patient -->
+                        <td class="p-3 font-bold text-teal-700 cursor-pointer hover:underline" onclick="openPatientImpayes('${f.patient.replace(/'/g, "\\'")}', '${f.praticien.replace(/'/g, "\\'")}')">${f.patient}</td>
+                        <td class="p-3 text-center font-mono text-blue-600 cursor-pointer hover:underline" onclick="showFseDetails('${f.id}')">${f.numFSE}</td>
+                        <!-- Clic sur la mutuelle -->
+                        <td class="p-3 truncate max-w-[150px] text-teal-700 cursor-pointer hover:underline" onclick="openMutuelleImpayes('${(f.mutuelle || f.caisse || '').replace(/'/g, "\\'")}')">${f.mutuelle || f.caisse}</td>
                         <td class="p-3 text-right font-black text-rose-600">${du.toFixed(2)} €</td>
                     </tr>
                 `;
@@ -3379,7 +3380,7 @@
                     <td class="p-2 text-right font-bold text-indigo-700">${totalRCP.toFixed(2)} €</td>
                     <td class="p-2 text-right font-black bg-gray-200">${globTF.toFixed(2)} €</td>
                     <td class="p-2 text-right font-black text-emerald-700 bg-gray-200">${globTP.toFixed(2)} €</td>
-                    <td class="p-2 text-right font-black text-rose-700 bg-gray-200">${globDu.toFixed(2)} €</td>
+                    <td class="p-2 text-right font-bold text-rose-600 bg-gray-50 hover:bg-rose-100 cursor-pointer hover:underline transition" title="Voir le détail des factures impayées de ce mois" onclick="openMonthImpayes('${m}', '${monthNames[i]}', '${selectedYear}', '${gPrat}')">${globDu.toFixed(2)} €</td>
                     <td class="p-2 text-right font-black text-orange-800 bg-orange-100">${globTx} %</td>
                 </tr>
             `;
@@ -3415,6 +3416,125 @@
                 alert("Erreur lors de la sauvegarde automatique : " + error.message);
             }
         }
+
+        // ==========================================
+        // SOUS-MODALES DE DÉTAILS D'IMPAYÉS & FSE
+        // ==========================================
+
+        // 1. Modale pour un patient spécifique
+        function openPatientImpayes(patient, praticien) {
+            document.getElementById('detailsImpayesTitle').innerText = "Impayés : " + patient;
+            document.getElementById('detailsImpayesSubtitle').innerText = "Praticien concerné : " + praticien;
+            
+            let impayes = fseList.filter(f => !f.isDefacture && !f.isLocked && f.patient === patient && f.praticien === praticien && ((f.partRO > 0 && !f.checkRO) || (f.partRC > 0 && !f.checkRC)));
+            populateDetailsImpayes(impayes);
+            document.getElementById('detailsImpayesModal').classList.remove('hidden');
+        }
+
+        // 2. Modale pour une mutuelle spécifique
+        function openMutuelleImpayes(mutuelle) {
+            document.getElementById('detailsImpayesTitle').innerText = "Impayés Mutuelle : " + mutuelle;
+            document.getElementById('detailsImpayesSubtitle').innerText = "Tous les patients / Tous les praticiens (Cabinet actif)";
+            
+            let impayes = fseList.filter(f => !f.isDefacture && !f.isLocked && (f.mutuelle === mutuelle || f.caisse === mutuelle) && ((f.partRO > 0 && !f.checkRO) || (f.partRC > 0 && !f.checkRC)));
+            populateDetailsImpayes(impayes);
+            document.getElementById('detailsImpayesModal').classList.remove('hidden');
+        }
+
+        // 3. Fonction commune de remplissage de la liste des détails
+        function populateDetailsImpayes(impayes) {
+            const tbody = document.getElementById('detailsImpayesBody');
+            tbody.innerHTML = '';
+            impayes.forEach(f => {
+                let du = 0;
+                if(f.partRO > 0 && !f.checkRO) du += f.partRO;
+                if(f.partRC > 0 && !f.checkRC) du += f.partRC;
+                
+                tbody.innerHTML += `
+                    <tr class="hover:bg-orange-50 transition border-b border-gray-100">
+                        <td class="p-2">${new Date(f.date).toLocaleDateString('fr-FR')}</td>
+                        <td class="p-2 text-center">${f.lot || '-'}</td>
+                        <td class="p-2 text-center">${f.dre || '-'}</td>
+                        <td class="p-2">${getPraticienBadge(f.praticien)}</td>
+                        <td class="p-2 font-bold">${f.patient}</td>
+                        <td class="p-2 text-center font-mono font-bold text-blue-600 cursor-pointer hover:underline" onclick="showFseDetails('${f.id}')">${f.numFSE}</td>
+                        <td class="p-2 truncate max-w-[150px]">${f.mutuelle || f.caisse}</td>
+                        <td class="p-2 text-right font-black text-rose-600">${du.toFixed(2)} €</td>
+                    </tr>
+                `;
+            });
+        }
+
+        // 4. Modale pour le mois spécifique depuis le Bilan
+        function openMonthImpayes(monthStr, monthName, year, praticienFilter) {
+            document.getElementById('impayesBilanTitle').innerText = `Détail des Impayés - ${monthName} ${year}`;
+            
+            let impayes = fseList.filter(f => 
+                !f.isDefacture && !f.isLocked && 
+                f.date.substring(0,4) === year && f.date.split('-')[1] === monthStr && 
+                ((f.partRO > 0 && !f.checkRO) || (f.partRC > 0 && !f.checkRC))
+            );
+
+            if (praticienFilter !== 'ALL') impayes = impayes.filter(f => f.praticien === praticienFilter);
+            
+            const tbody = document.getElementById('impayesBilanBody');
+            tbody.innerHTML = '';
+            let totalDuGlobal = 0;
+            
+            impayes.forEach(f => {
+                let resteRO = (f.partRO > 0 && !f.checkRO) ? f.partRO : 0;
+                let resteRC = (f.partRC > 0 && !f.checkRC) ? f.partRC : 0;
+                let totalDu = resteRO + resteRC;
+                totalDuGlobal += totalDu;
+                
+                tbody.innerHTML += `
+                    <tr class="hover:bg-rose-50 transition border-b border-gray-100">
+                        <td class="p-2">
+                            <div class="text-[10px] text-gray-500">${new Date(f.date).toLocaleDateString('fr-FR')}</div>
+                            <div class="font-mono text-blue-600 font-bold cursor-pointer hover:underline" onclick="showFseDetails('${f.id}')">${f.numFSE}</div>
+                        </td>
+                        <td class="p-2 font-bold">${f.patient}</td>
+                        <td class="p-2 truncate max-w-[150px]">${f.mutuelle || f.caisse}</td>
+                        <td class="p-2 text-right">${resteRO.toFixed(2)} €</td>
+                        <td class="p-2 text-right">${resteRC.toFixed(2)} €</td>
+                        <td class="p-2 text-right font-black text-rose-600">${totalDu.toFixed(2)} €</td>
+                    </tr>
+                `;
+            });
+            
+            document.getElementById('impayesBilanTotal').innerText = totalDuGlobal.toFixed(2) + ' €';
+            document.getElementById('impayesBilanModal').classList.remove('hidden');
+        }
+
+        // 5. Affichage complet d'une FSE (la "Fiche" de la facture)
+        function showFseDetails(fseId) {
+            const fse = fseList.find(f => f.id === fseId);
+            if (!fse) return;
+            
+            let statusRO = fse.checkRO ? `<span class="text-emerald-600 font-bold text-xs bg-emerald-50 px-1 py-0.5 rounded border border-emerald-200">Payé le ${new Date(fse.dateVirementRO).toLocaleDateString('fr-FR')}</span>` : `<span class="text-rose-600 font-bold text-xs bg-rose-50 px-1 py-0.5 rounded border border-rose-200">En attente</span>`;
+            let statusRC = fse.checkRC ? `<span class="text-emerald-600 font-bold text-xs bg-emerald-50 px-1 py-0.5 rounded border border-emerald-200">Payé le ${new Date(fse.dateVirementRC).toLocaleDateString('fr-FR')}</span>` : `<span class="text-rose-600 font-bold text-xs bg-rose-50 px-1 py-0.5 rounded border border-rose-200">En attente</span>`;
+            
+            const html = `
+                <div class="grid grid-cols-2 gap-y-4 gap-x-4">
+                    <div class="text-xs text-gray-500 uppercase font-bold text-right">N° FSE</div><div class="font-mono font-bold text-teal-700 text-lg">${fse.numFSE}</div>
+                    <div class="text-xs text-gray-500 uppercase font-bold text-right pt-1">Date du lot</div><div class="font-medium pt-1">${new Date(fse.date).toLocaleDateString('fr-FR')} (Lot ${fse.lot || '-'})</div>
+                    <div class="text-xs text-gray-500 uppercase font-bold text-right pt-1">Praticien</div><div class="font-medium pt-1">${fse.praticien}</div>
+                    <div class="text-xs text-gray-500 uppercase font-bold text-right pt-1">Patient</div><div class="font-black text-gray-800 pt-1">${fse.patient}</div>
+                    <div class="col-span-2 border-t border-gray-100 my-1"></div>
+                    <div class="text-xs text-gray-500 uppercase font-bold text-right">Caisse (RO)</div><div class="font-medium">${fse.caisse || '-'}</div>
+                    <div class="text-xs text-gray-500 uppercase font-bold text-right">Part RO</div><div><span class="font-mono font-bold text-base">${fse.partRO.toFixed(2)} €</span> <br><div class="mt-1">${statusRO}</div></div>
+                    <div class="col-span-2 border-t border-gray-100 my-1"></div>
+                    <div class="text-xs text-gray-500 uppercase font-bold text-right">Mutuelle (RC)</div><div class="font-medium">${fse.mutuelle || '-'} <br><span class="text-[10px] text-gray-400">DRE: ${fse.dre || '-'}</span></div>
+                    <div class="text-xs text-gray-500 uppercase font-bold text-right">Part RC</div><div><span class="font-mono font-bold text-base">${fse.partRC.toFixed(2)} €</span> <br><div class="mt-1">${statusRC}</div></div>
+                </div>
+            `;
+            document.getElementById('fseDetailsContent').innerHTML = html;
+            document.getElementById('fseDetailsModal').classList.remove('hidden');
+        }
+
+        // Fonctions pour fermer les modales (au cas où elles manqueraient)
+        function closeDetailsImpayesModal() { document.getElementById('detailsImpayesModal').classList.add('hidden'); }
+        function closeFseDetailsModal() { document.getElementById('fseDetailsModal').classList.add('hidden'); }
     </script>
 </body>
 </html>
