@@ -464,7 +464,40 @@
                                     <button type="button" onclick="updateNbNoemieFseRows()" class="text-[10px] font-bold bg-white text-teal-700 px-3 py-1.5 rounded hover:bg-teal-100 transition shadow-sm border border-teal-300">Ajouter</button>
                                 </div>
                             </div>
+                            <div id="noemieFacturesListContainer">
                             <div id="noemieFacturesList" class="space-y-2"></div>
+                            </div>
+                            <div id="releveSmartUI" class="hidden mt-4 border-t border-gray-200 pt-4">
+    <div class="border border-amber-200 rounded-lg p-4 bg-white shadow-sm mb-4">
+        <div class="flex justify-between items-center mb-4">
+            <div class="w-1/3">
+                <label class="block text-xs font-bold text-amber-700 uppercase mb-1">Montant global recherché (€)</label>
+                <input type="number" id="releveTargetAmount" step="0.01" class="w-full border-2 border-amber-300 rounded p-2 text-lg font-bold text-amber-900 focus:ring-amber-500 bg-amber-50" onkeyup="updateReleveTotals()">
+            </div>
+            <div class="w-2/3 flex justify-end items-center">
+                <label class="flex items-center space-x-2 text-sm font-medium text-gray-700 cursor-pointer">
+                    <input type="checkbox" id="releveIgnoreMutuelle" class="rounded text-amber-600 focus:ring-amber-500 w-5 h-5" onchange="renderReleveSmartList()">
+                    <span>Ignorer le filtre Mutuelle (Afficher toutes les FSE en attente)</span>
+                </label>
+            </div>
+        </div>
+
+        <div class="flex justify-between items-end mb-2">
+            <div class="text-[10px] font-bold text-gray-400 uppercase">Factures disponibles au pointage</div>
+            <div class="text-[10px] font-bold text-gray-400 uppercase">Reste à payer</div>
+        </div>
+
+        <div id="releveFseList" class="max-h-64 overflow-y-auto custom-scrollbar border border-gray-200 rounded bg-gray-50 flex flex-col gap-1 p-1">
+            <!-- Rempli en Javascript -->
+        </div>
+
+        <div class="mt-4 bg-gray-50 border border-gray-200 rounded p-3 flex justify-end items-center gap-6">
+            <div class="text-sm text-gray-600">Cible : <span id="lblReleveCible" class="font-bold">0.00 €</span></div>
+            <div class="text-sm text-blue-600">Sélectionné : <span id="lblReleveSelect" class="font-bold">0.00 €</span></div>
+            <div class="text-lg text-gray-800">Reste à pointer : <span id="lblReleveReste" class="font-black text-gray-400">0.00 €</span></div>
+        </div>
+    </div>
+</div>
                             <div class="flex justify-end items-center mt-3 p-2 bg-indigo-50 rounded border border-indigo-100 shadow-inner">
                                 <span class="font-semibold text-gray-700 mr-2">Total en cours :</span>
                                 <span id="noemieLiveTotal" class="font-bold text-xl text-indigo-700">0.00</span>
@@ -1450,6 +1483,20 @@
             </div>
         </div>
     </div>
+
+    <!-- Mini Modale Relevé Automatique -->
+<div id="miniReleveModal" class="hidden fixed inset-0 bg-teal-900/40 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-xl w-full max-w-xs border-t-4 border-teal-500 p-5">
+        <h3 class="text-sm font-black text-gray-800 mb-3 uppercase text-center">Numéro de Relevé</h3>
+        <p class="text-[11px] text-gray-500 mb-4 text-center">Saisissez le N° de relevé bancaire pour le lier à cet encaissement.</p>
+        <input type="hidden" id="miniReleveNoemieId">
+        <input type="text" id="miniReleveInput" placeholder="Ex: 56789..." class="w-full border border-gray-300 rounded p-2 text-center font-mono text-sm focus:ring-2 focus:ring-teal-500 focus:outline-none mb-4">
+        <div class="flex gap-2">
+            <button onclick="closeMiniReleveModal()" class="w-1/2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2 rounded text-xs transition">Plus tard</button>
+            <button onclick="saveMiniReleve()" class="w-1/2 bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 rounded text-xs transition shadow-md">Valider</button>
+        </div>
+    </div>
+</div>
 
     <datalist id="patientsList"></datalist>
     <datalist id="caissesList"></datalist>
@@ -3490,31 +3537,80 @@
         }
 
         // ==========================================
-        // SAUVEGARDE EN LIGNE (INLINE EDIT NOEMIE)
+        // SAUVEGARDE EN LIGNE ET MISE À JOUR FSE AUTO
         // ==========================================
         async function inlineUpdateNoemie(id, field, value) {
             const noemieIndex = noemieList.findIndex(n => n.id === id);
             if (noemieIndex === -1) return;
             
-            // Adaptation du nom de la colonne pour Supabase
-            let dbField = field;
-            if (field === 'encaisseLe') dbField = 'encaisse_le';
-            
-            let finalValue = value.trim();
-            if (finalValue === '') finalValue = null; 
+            let dbField = field === 'encaisseLe' ? 'encaisse_le' : field;
+            let finalValue = value.trim() === '' ? null : value.trim(); 
 
-            // Mise à jour locale pour éviter de recharger toute la page
             noemieList[noemieIndex][field] = finalValue || '';
 
-            // Envoi silencieux à Supabase
-            const { error } = await supabaseClient
-                .from('noemie')
-                .update({ [dbField]: finalValue })
-                .eq('id', id);
-                
-            if (error) {
-                alert("Erreur lors de la sauvegarde automatique : " + error.message);
+            const { error } = await supabaseClient.from('noemie').update({ [dbField]: finalValue }).eq('id', id);
+            if (error) { alert("Erreur : " + error.message); return; }
+
+            // L'AUTOMATISATION : Si on vient de saisir une date d'encaissement...
+            if (field === 'encaisseLe' && finalValue) {
+                const n = noemieList[noemieIndex];
+                let fsesToUpdate = [];
+
+                // On boucle sur toutes les factures liées à ce retour
+                n.factures.forEach(fac => {
+                    let linkedFse = fseList.find(f => f.numFSE === fac.fse && f.praticien === n.praticien && !f.isDefacture);
+                    if (!linkedFse) linkedFse = fseList.find(f => f.numFSE === fac.fse && !f.isDefacture);
+                    
+                    if (linkedFse) {
+                        let mVal = fac.montant;
+                        let isRoMatch = Math.abs(mVal - linkedFse.partRO) <= 0.01;
+                        let isRcMatch = Math.abs(mVal - linkedFse.partRC) <= 0.01;
+                        let isGlobalMatch = Math.abs(mVal - (linkedFse.partRO + linkedFse.partRC)) <= 0.01;
+                        let changed = false;
+
+                        // On valide intelligemment la bonne part
+                        if (isGlobalMatch) { linkedFse.checkRO = true; linkedFse.dateVirementRO = finalValue; linkedFse.checkRC = true; linkedFse.dateVirementRC = finalValue; changed = true; } 
+                        else if (isRoMatch && !linkedFse.checkRO) { linkedFse.checkRO = true; linkedFse.dateVirementRO = finalValue; changed = true; } 
+                        else if (isRcMatch && !linkedFse.checkRC) { linkedFse.checkRC = true; linkedFse.dateVirementRC = finalValue; changed = true; } 
+                        else if (mVal > 0) { linkedFse.checkRO = true; linkedFse.dateVirementRO = finalValue; changed = true; }
+
+                        if(changed) { 
+                            linkedFse.isLocked = (linkedFse.checkRO && linkedFse.checkRC); 
+                            fsesToUpdate.push(mapFseToDb(linkedFse)); 
+                        }
+                    }
+                });
+
+                // On envoie le lot de FSE mises à jour à Supabase
+                if (fsesToUpdate.length > 0) {
+                    await supabaseClient.from('fse').upsert(fsesToUpdate);
+                }
+
+                // Enfin, on ouvre la modale pour proposer la saisie du N° de relevé !
+                openMiniReleveModal(id);
             }
+        }
+
+        // Fonctions de la Mini-Modale
+        function openMiniReleveModal(noemieId) {
+            document.getElementById('miniReleveNoemieId').value = noemieId;
+            document.getElementById('miniReleveInput').value = '';
+            document.getElementById('miniReleveModal').classList.remove('hidden');
+            setTimeout(() => document.getElementById('miniReleveInput').focus(), 100);
+        }
+
+        function closeMiniReleveModal() {
+            document.getElementById('miniReleveModal').classList.add('hidden');
+        }
+
+        function saveMiniReleve() {
+            const noemieId = document.getElementById('miniReleveNoemieId').value;
+            const numReleve = document.getElementById('miniReleveInput').value;
+            if (numReleve.trim() !== '') {
+                inlineUpdateNoemie(noemieId, 'releve', numReleve);
+                renderNoemieTable();
+            }
+            closeMiniReleveModal();
         }
 
         // ==========================================
@@ -3698,6 +3794,141 @@
             `;
             document.getElementById('fseDetailsContent').innerHTML = html;
             document.getElementById('fseDetailsModal').classList.remove('hidden');
+        }
+
+        // ==========================================
+        // POINTAGE INTELLIGENT (RELEVÉS BANCAIRES)
+        // ==========================================
+        //let releveSelectedFses = [];
+
+        // Écouteurs pour basculer entre liste manuelle et pointage intelligent
+        document.addEventListener('DOMContentLoaded', () => {
+            const toggleSmartUI = () => {
+                const isReleve = document.getElementById('cat_releve').checked;
+                const manualList = document.getElementById('noemieFacturesListContainer');
+                const smartUI = document.getElementById('releveSmartUI');
+                
+                if (isReleve) {
+                    if (manualList) manualList.classList.add('hidden');
+                    if (smartUI) smartUI.classList.remove('hidden');
+                    renderReleveSmartList();
+                } else {
+                    if (manualList) manualList.classList.remove('hidden');
+                    if (smartUI) smartUI.classList.add('hidden');
+                }
+            };
+
+            ['cat_noemie', 'cat_justif', 'cat_releve'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.addEventListener('change', toggleSmartUI);
+            });
+            
+            const caisseInput = document.getElementById('n_caisse');
+            if (caisseInput) caisseInput.addEventListener('input', renderReleveSmartList);
+        });
+
+        function renderReleveSmartList() {
+            const container = document.getElementById('releveFseList');
+            if (!container) return;
+
+            const ignoreMut = document.getElementById('releveIgnoreMutuelle').checked;
+            const searchCaisse = document.getElementById('n_caisse').value.toLowerCase().trim();
+            const gPrat = document.getElementById('globalPraticienFilter') ? document.getElementById('globalPraticienFilter').value : 'ALL';
+            let targetPraticien = gPrat !== 'ALL' ? gPrat : (praticiensList.length > 0 ? praticiensList[0].name : '');
+
+            // On filtre les FSE en attente d'au moins un règlement
+            let availableFses = fseList.filter(f =>
+                !f.isDefacture &&
+                !f.isLocked &&
+                f.praticien === targetPraticien &&
+                ((f.partRO > 0 && !f.checkRO) || (f.partRC > 0 && !f.checkRC))
+            );
+
+            if (!ignoreMut && searchCaisse !== '') {
+                availableFses = availableFses.filter(f =>
+                    (f.mutuelle || '').toLowerCase().includes(searchCaisse) ||
+                    (f.caisse || '').toLowerCase().includes(searchCaisse)
+                );
+            }
+
+            // Tri par date décroissante
+            availableFses.sort((a, b) => new Date(b.date) - new Date(a.date));
+            container.innerHTML = '';
+
+            if(availableFses.length === 0) {
+                container.innerHTML = '<div class="p-4 text-center text-gray-500 italic text-sm">Aucune facture en attente correspondante.</div>';
+                return;
+            }
+
+            availableFses.forEach(f => {
+                // Vérification si la FSE possède déjà un retour NOEMIE
+                const hasNoemie = noemieList.some(n => n.factures.some(fac => fac.fse === f.numFSE));
+                const badgeNoemie = hasNoemie ? `<span class="bg-indigo-50 text-indigo-600 border border-indigo-200 text-[9px] px-1.5 py-0.5 rounded font-black tracking-wider ml-2 uppercase">NOEMIE OK</span>` : '';
+
+                let roHtml = '', rcHtml = '';
+                
+                if (f.partRO > 0 && !f.checkRO) {
+                    const isChecked = releveSelectedFses.some(s => s.id === f.id && s.isRO);
+                    roHtml = `
+                        <div class="flex justify-between items-center py-1">
+                            <label class="flex items-center space-x-3 cursor-pointer">
+                                <input type="checkbox" ${isChecked ? 'checked' : ''} onchange="toggleReleveSelection('${f.id}', '${f.numFSE}', true, false, ${f.partRO}, this.checked)" class="rounded text-teal-600 focus:ring-teal-500 w-4 h-4">
+                                <span class="text-[11px] font-bold text-gray-600 uppercase">PART RO ${badgeNoemie}</span>
+                            </label>
+                            <div class="font-bold text-indigo-700 text-sm">${f.partRO.toFixed(2)} €</div>
+                        </div>`;
+                }
+
+                if (f.partRC > 0 && !f.checkRC) {
+                    const isChecked = releveSelectedFses.some(s => s.id === f.id && s.isRC);
+                    rcHtml = `
+                        <div class="flex justify-between items-center py-1">
+                            <label class="flex items-center space-x-3 cursor-pointer">
+                                <input type="checkbox" ${isChecked ? 'checked' : ''} onchange="toggleReleveSelection('${f.id}', '${f.numFSE}', false, true, ${f.partRC}, this.checked)" class="rounded text-teal-600 focus:ring-teal-500 w-4 h-4">
+                                <span class="text-[11px] font-bold text-gray-600 uppercase">PART RC ${badgeNoemie}</span>
+                            </label>
+                            <div class="font-bold text-indigo-700 text-sm">${f.partRC.toFixed(2)} €</div>
+                        </div>`;
+                }
+
+                container.innerHTML += `
+                    <div class="bg-white border-b border-gray-100 p-2 hover:bg-teal-50/20 transition">
+                        <div class="flex justify-between items-center mb-1">
+                            <div class="text-xs font-black text-gray-800">${f.patient.toUpperCase()} <span class="text-indigo-500 font-mono font-medium ml-1">(${f.numFSE})</span></div>
+                        </div>
+                        <div class="text-[10px] text-gray-500 mb-2">${new Date(f.date).toLocaleDateString('fr-FR')} • <span class="text-orange-600 uppercase font-semibold">${f.caisse || ''} / ${f.mutuelle || ''}</span></div>
+                        <div class="pl-2 border-l-2 border-gray-100 flex flex-col gap-0.5">
+                            ${roHtml} ${rcHtml}
+                        </div>
+                    </div>
+                `;
+            });
+            updateReleveTotals();
+        }
+
+        function toggleReleveSelection(fseId, numFSE, isRO, isRC, montant, isChecked) {
+            if (isChecked) {
+                releveSelectedFses.push({ id: fseId, numFSE: numFSE, isRO: isRO, isRC: isRC, montant: montant });
+            } else {
+                releveSelectedFses = releveSelectedFses.filter(s => !(s.id === fseId && s.isRO === isRO && s.isRC === isRC));
+            }
+            updateReleveTotals();
+        }
+
+        function updateReleveTotals() {
+            const target = parseFloat(document.getElementById('releveTargetAmount').value) || 0;
+            const selected = releveSelectedFses.reduce((sum, item) => sum + item.montant, 0);
+            const diff = target - selected;
+
+            document.getElementById('lblReleveCible').innerText = target.toFixed(2) + ' €';
+            document.getElementById('lblReleveSelect').innerText = selected.toFixed(2) + ' €';
+
+            const resteEl = document.getElementById('lblReleveReste');
+            resteEl.innerText = diff.toFixed(2) + ' €';
+
+            if (diff === 0 && target > 0) resteEl.className = "font-black text-emerald-600";
+            else if (diff < 0) resteEl.className = "font-black text-rose-600";
+            else resteEl.className = "font-black text-gray-400";
         }
 
         // Fonctions pour fermer les modales (au cas où elles manqueraient)
