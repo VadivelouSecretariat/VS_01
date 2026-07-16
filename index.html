@@ -1604,10 +1604,23 @@
             
             if (email && pwd) {
                 document.body.style.cursor = 'wait';
-                // On s'assure d'avoir la dernière liste depuis Supabase avant d'afficher
-                await loadCabinetsConfig();
-                document.body.style.cursor = 'default';
+                
+                // 1. Authentification auprès de Supabase avec le compte existant
+                const { data, error } = await supabaseClient.auth.signInWithPassword({
+                    email: email,
+                    password: pwd,
+                });
 
+                if (error) {
+                    document.body.style.cursor = 'default';
+                    alert("Erreur de connexion : Identifiants invalides.");
+                    return;
+                }
+
+                // 2. Maintenant qu'on est identifié, on peut charger les données (le RLS nous laissera passer)
+                await loadCabinetsConfig();
+                
+                document.body.style.cursor = 'default';
                 document.getElementById('ecran-login').classList.add('hidden');
                 document.getElementById('ecran-dashboard').classList.remove('hidden');
                 renderCabinetsDashboard();
