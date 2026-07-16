@@ -1809,36 +1809,78 @@
         async function dbDeleteFse(id) { await supabaseClient.from('fse').delete().eq('id', id); }
         async function dbUpdateNoemie(noemieObj) { await supabaseClient.from('noemie').upsert(mapNoemieToDb(noemieObj)); }
 
-        function getPraticienBadge(pName) {
-            if(!pName || pName === '-') return `<span class="text-gray-500 font-semibold">-</span>`;
-            const pObj = praticiensList.find(p => p.name === pName);
-            const cl = pObj ? colorClasses[pObj.color] : colorClasses['bleu'];
-            return `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold border shadow-sm ${cl}">` + pName + `</span>`;
+        function getPraticienBadge(pratName) {
+            if (!pratName || pratName === '') return '-';
+            let p = praticiensList.find(x => x.name === pratName);
+            let color = p ? p.color : 'gris';
+            
+            const colorMap = {
+                'vert': 'bg-emerald-100 text-emerald-800 border-emerald-300',
+                'bleu': 'bg-blue-100 text-blue-800 border-blue-300',
+                'rouge': 'bg-rose-100 text-rose-800 border-rose-300',
+                'jaune': 'bg-amber-100 text-amber-800 border-amber-300',
+                'violet': 'bg-purple-100 text-purple-800 border-purple-300',
+                'rose': 'bg-pink-100 text-pink-800 border-pink-300',
+                'gris': 'bg-gray-100 text-gray-800 border-gray-300'
+            };
+            
+            let cClass = colorMap[color] || colorMap['gris'];
+            
+            // L'ajout de whitespace-nowrap et inline-block empêche le badge de se casser en deux
+            return `<span class="${cClass} border text-[10px] px-2 py-0.5 rounded-md font-bold shadow-sm whitespace-nowrap inline-block">${pratName}</span>`;
         }
 
         // ==========================================
         // INTERFACE & NAVIGATION
         // ==========================================
         function switchPage(pageId) {
-            ['dashboardPage', 'noemiePage', 'retrosPage'].forEach(id => document.getElementById(id).classList.add('page-hidden'));
-            document.getElementById(pageId).classList.remove('page-hidden');
+            // 1. On cache toutes les pages (on a retiré retrosPage)
+            ['dashboardPage', 'noemiePage'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.classList.add('page-hidden');
+            });
             
-            const btnDash = document.getElementById('navDashboard'), btnNoemie = document.getElementById('navNoemie'), btnRetros = document.getElementById('navRetros');
-            const btnNewFse = document.getElementById('btnNewFse'), btnNewNoemie = document.getElementById('btnNewNoemie'), btnNewRetro = document.getElementById('btnNewRetro');
+            // 2. On affiche la page demandée
+            const targetPage = document.getElementById(pageId);
+            if (targetPage) targetPage.classList.remove('page-hidden');
             
-            btnDash.className = btnNoemie.className = btnRetros.className = "px-3 py-1.5 text-sm font-semibold rounded text-teal-200 hover:text-white hover:bg-teal-600/50 transition whitespace-nowrap";
-            btnNewFse.classList.add('hidden'); btnNewNoemie.classList.add('hidden'); btnNewRetro.classList.add('hidden');
+            // 3. Récupération des éléments (on a retiré navRetros et btnNewRetro)
+            const btnDash = document.getElementById('navDashboard');
+            const btnNoemie = document.getElementById('navNoemie');
+            const btnNewFse = document.getElementById('btnNewFse');
+            const btnNewNoemie = document.getElementById('btnNewNoemie');
+            
+            // 4. Réinitialisation visuelle de tous les onglets (couleur inactive)
+            const inactiveClass = "px-3 py-1.5 text-sm font-semibold rounded text-teal-200 hover:text-white hover:bg-teal-600/50 transition whitespace-nowrap";
+            if (btnDash) btnDash.className = inactiveClass;
+            if (btnNoemie) btnNoemie.className = inactiveClass;
+            
+            // On cache les boutons d'action par défaut
+            if (btnNewFse) btnNewFse.classList.add('hidden'); 
+            if (btnNewNoemie) btnNewNoemie.classList.add('hidden');
 
-            if(pageId === 'dashboardPage') { 
-                btnDash.classList.add('bg-teal-600', 'text-white'); btnDash.classList.remove('text-teal-200'); btnNewFse.classList.remove('hidden'); render(); 
+            // 5. Activation visuelle du bon onglet et affichage de ses actions
+            if (pageId === 'dashboardPage') { 
+                if (btnDash) {
+                    btnDash.classList.add('bg-teal-600', 'text-white'); 
+                    btnDash.classList.remove('text-teal-200'); 
+                }
+                if (btnNewFse) btnNewFse.classList.remove('hidden'); 
+                render(); 
             } 
             else if (pageId === 'noemiePage') { 
-                btnNoemie.classList.add('bg-teal-600', 'text-white'); btnNoemie.classList.remove('text-teal-200'); btnNewNoemie.classList.remove('hidden'); 
-                if(document.getElementById('noemieFacturesList').children.length === 0) addNoemieFactureRow(); renderNoemieTable(); 
+                if (btnNoemie) {
+                    btnNoemie.classList.add('bg-teal-600', 'text-white'); 
+                    btnNoemie.classList.remove('text-teal-200'); 
+                }
+                if (btnNewNoemie) btnNewNoemie.classList.remove('hidden'); 
+                
+                const facturesList = document.getElementById('noemieFacturesList');
+                if (facturesList && facturesList.children.length === 0) {
+                    if (typeof addNoemieFactureRow === 'function') addNoemieFactureRow(); 
+                }
+                renderNoemieTable(); 
             } 
-            else if (pageId === 'retrosPage') { 
-                btnRetros.classList.add('bg-teal-600', 'text-white'); btnRetros.classList.remove('text-teal-200'); btnNewRetro.classList.remove('hidden'); renderRetros(); 
-            }
         }
 
         function updateDatalists() {
