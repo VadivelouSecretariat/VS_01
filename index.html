@@ -2823,6 +2823,7 @@
 
         function parseBordereauNoemie(text) {
             let factures = [];
+            // On met tout le texte sur une seule ligne continue pour faciliter la lecture
             let cleanText = text.replace(/[\r\n]/g, ' ').replace(/\s+/g, ' ');
             
             // 1. Extractions globales (Caisse, Date, Relevé)
@@ -2839,50 +2840,25 @@
             let matchReleve = cleanText.match(/n[°o]\s*(\d{6,})/i) || cleanText.match(/relev[eé]\s*(?:n[°o])?\s*(\d+)/i);
             if (matchReleve) releve = matchReleve[1];
 
-            // 2. ISOLATION STRICTE DU TABLEAU (Le bouclier anti-décalage)
-            let dataChunk = cleanText;
+            // 2. LA FUSION REGEX (Le correctif absolu)
+            // \b(\d{8,9})\b : Trouve le numéro de FSE (8 ou 9 chiffres).
+            // (?:(?!\b\d{8,9}\b).)*? : Avance caractère par caractère, mais s'arrête IMMEDIATEMENT si un autre numéro de FSE pointe le bout de son nez.
+            // (\d+\s*[,.]\s*\d{2}) : Capture le premier montant trouvé.
+            const regexFacture = /\b(\d{8,9})\b(?:(?!\b\d{8,9}\b).)*?(\d+\s*[,.]\s*\d{2})/g;
             
-            // On détruit l'en-tête pour tuer le "Numéro fantôme" (on coupe juste avant les colonnes)
-            let headerRegex = /(?:N[°o]\s*facture|Patient|Date facture)/i;
-            let matchHeader = dataChunk.match(headerRegex);
-            if (matchHeader) {
-                dataChunk = dataChunk.substring(matchHeader.index + matchHeader[0].length);
-            }
-            
-            // On détruit le pied de page pour ignorer les totaux
-            dataChunk = dataChunk.split(/(?:\d+\s+paiements?|Montant total|Imprim[eé] le)/i)[0];
-
-            // 3. EXTRACTION SÉQUENTIELLE EN TRANCHES
-            const fseRegex = /\b(\d{8,9})\b/g;
-            let fsesFound = [];
             let match;
-            
-            while ((match = fseRegex.exec(dataChunk)) !== null) {
-                fsesFound.push({ fse: match[1], index: match.index });
+            while ((match = regexFacture.exec(cleanText)) !== null) {
+                // match[1] = FSE, match[2] = Montant
+                let fseValue = match[1];
+                let montantStr = match[2].replace(/\s/g, '').replace(',', '.');
+                
+                factures.push({ 
+                    fse: fseValue, 
+                    montant: parseFloat(montantStr) 
+                });
             }
             
-            for (let i = 0; i < fsesFound.length; i++) {
-                let numFSE = fsesFound[i].fse;
-                let indexFSE = fsesFound[i].index;
-                
-                // On isole strictement le texte entre CETTE facture et la SUIVANTE
-                let endIndex = (i + 1 < fsesFound.length) ? fsesFound[i+1].index : dataChunk.length;
-                let textAfter = dataChunk.substring(indexFSE + numFSE.length, endIndex);
-                
-                // On attrape n'importe quel nombre à 2 décimales (sans contrainte de mot pour tolérer les erreurs PDF)
-                let amounts = textAfter.match(/(\d+\s*[,.]\s*\d{2})/g);
-                let montantFinal = 0;
-                
-                if (amounts && amounts.length > 0) {
-                    // On prend systématiquement le TOUT PREMIER montant de la tranche
-                    let firstAmountStr = amounts[0];
-                    montantFinal = parseFloat(firstAmountStr.replace(/\s/g, '').replace(',', '.'));
-                }
-                
-                factures.push({ fse: numFSE, montant: montantFinal });
-            }
-            
-            // 4. Nettoyage
+            // 3. Nettoyage des doublons éventuels
             let uniqueFactures = [];
             let seen = new Set();
             factures.forEach(f => { if(!seen.has(f.fse)) { seen.add(f.fse); uniqueFactures.push(f); } });
