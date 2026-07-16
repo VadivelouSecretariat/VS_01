@@ -2838,19 +2838,42 @@
             let matchReleve = cleanText.match(/n[°o]\s*(\d{6,})/i) || cleanText.match(/relev[eé]\s*(?:n[°o])?\s*(\d+)/i);
             if (matchReleve) releve = matchReleve[1];
 
-            // ------------------------------------------------------------------------
-            // CORRECTION : On coupe le texte avant d'atteindre le résumé de fin de page
-            // On s'arrête dès qu'on voit "X paiements" ou "Montant total"
-            // ------------------------------------------------------------------------
+            // 1. Coupure pour éviter d'avaler les totaux finaux du document
             let dataChunk = cleanText.split(/(?:\d+\s+paiements?|Montant total)/i)[0];
 
-            // CORRECTION : On cherche sur dataChunk (tronqué) et on accepte les points et virgules
-            const regexFacture = /\b(\d{8,9})\b\s+(?:.*?\s+)?(\d+[,.]\d{2})\b/g;
+            // 2. Repérage de TOUTES les FSE dans le texte
+            const fseRegex = /\b(\d{8,9})\b/g;
+            let fsesFound = [];
             let match;
-            while ((match = regexFacture.exec(dataChunk)) !== null) {
-                factures.push({ fse: match[1], montant: parseFloat(match[2].replace(',', '.')) });
+            
+            while ((match = fseRegex.exec(dataChunk)) !== null) {
+                fsesFound.push({ fse: match[1], index: match.index });
             }
             
+            // 3. Extraction ciblée par "tranche" pour éviter les décalages
+            for (let i = 0; i < fsesFound.length; i++) {
+                let numFSE = fsesFound[i].fse;
+                let indexFSE = fsesFound[i].index;
+                
+                // On délimite le texte de cette FSE jusqu'à la FSE suivante (ou la fin)
+                let endIndex = (i + 1 < fsesFound.length) ? fsesFound[i+1].index : dataChunk.length;
+                let textAfter = dataChunk.substring(indexFSE + numFSE.length, endIndex);
+                
+                // On cherche tous les montants dans CETTE tranche précise
+                let amounts = textAfter.match(/\b\d+[,.]\d{2}\b/g);
+                let montantFinal = 0;
+                
+                if (amounts && amounts.length > 0) {
+                    // Les retours NOEMIE affichent souvent le montant facturé PUIS le montant payé.
+                    // Le plus sûr est de toujours prendre le dernier montant trouvé avant la FSE suivante.
+                    let lastAmountStr = amounts[amounts.length - 1];
+                    montantFinal = parseFloat(lastAmountStr.replace(',', '.'));
+                }
+                
+                factures.push({ fse: numFSE, montant: montantFinal });
+            }
+            
+            // 4. Nettoyage des doublons éventuels
             let uniqueFactures = [];
             let seen = new Set();
             factures.forEach(f => { if(!seen.has(f.fse)) { seen.add(f.fse); uniqueFactures.push(f); } });
