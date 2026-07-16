@@ -2326,7 +2326,7 @@
             document.body.style.cursor = 'default';
         }
 
-        // Algorithme infaillible d'extraction FSE (Version Rétro-lecture)
+        // Algorithme d'extraction FSE (Version Rétro-lecture)
         function parseBordereauLot(text) {
             let fses = [];
             let cleanText = text.replace(/[\r\n\|]/g, ' ').replace(/\s+/g, ' ');
@@ -2838,9 +2838,16 @@
             let matchReleve = cleanText.match(/n[°o]\s*(\d{6,})/i) || cleanText.match(/relev[eé]\s*(?:n[°o])?\s*(\d+)/i);
             if (matchReleve) releve = matchReleve[1];
 
-            const regexFacture = /\b(\d{8,9})\b\s+(?:.*?\s+)?(\d+,\d{2})\b/g;
+            // ------------------------------------------------------------------------
+            // CORRECTION : On coupe le texte avant d'atteindre le résumé de fin de page
+            // On s'arrête dès qu'on voit "X paiements" ou "Montant total"
+            // ------------------------------------------------------------------------
+            let dataChunk = cleanText.split(/(?:\d+\s+paiements?|Montant total)/i)[0];
+
+            // CORRECTION : On cherche sur dataChunk (tronqué) et on accepte les points et virgules
+            const regexFacture = /\b(\d{8,9})\b\s+(?:.*?\s+)?(\d+[,.]\d{2})\b/g;
             let match;
-            while ((match = regexFacture.exec(cleanText)) !== null) {
+            while ((match = regexFacture.exec(dataChunk)) !== null) {
                 factures.push({ fse: match[1], montant: parseFloat(match[2].replace(',', '.')) });
             }
             
