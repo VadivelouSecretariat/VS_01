@@ -24,6 +24,24 @@
 </head>
 <body class="bg-gray-50 text-gray-800 font-sans antialiased relative">
 
+    <!-- ÉCRAN DE DÉVERROUILLAGE SUPABASE (Caché par défaut) -->
+<div id="ecran-login-supabase" class="hidden flex-col items-center justify-center min-h-screen bg-teal-900/10 backdrop-blur-sm fixed inset-0 z-50">
+    <div class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-sm border-t-4 border-teal-600">
+        <h2 class="text-xl font-black text-teal-800 text-center mb-2">Verrouillage de Sécurité</h2>
+        <p class="text-xs text-gray-500 text-center mb-6">Connexion administrateur requise pour autoriser cet appareil.</p>
+        
+        <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Email Supabase</label>
+        <input type="email" id="sup-email" placeholder="contact@cabinet..." class="w-full mb-4 p-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:outline-none">
+        
+        <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Mot de passe</label>
+        <input type="password" id="sup-pwd" placeholder="••••••••" class="w-full mb-6 p-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:outline-none">
+        
+        <button onclick="loginSupabase()" class="w-full bg-teal-600 hover:bg-teal-700 transition text-white font-bold py-2.5 rounded-lg shadow-md">
+            Autoriser cet appareil
+        </button>
+    </div>
+</div>
+
     <!-- ========================================== -->
     <!-- ÉCRAN DE CONNEXION & SÉLECTION DE CABINET -->
     <!-- ========================================== -->
@@ -1568,32 +1586,60 @@
         let selectedCabinetForLogin = null;
 
         // 1. Chargement de la configuration des cabinets depuis SUPABASE
+        // ==========================================
+        // DÉMARRAGE ET SÉCURITÉ
+        // ==========================================
         async function loadCabinetsConfig() {
             try {
-                // Requête vers la table 'cabinets' en utilisant TES vraies colonnes
+                // 1. On vérifie la mémoire du navigateur
+                const { data: { session } } = await supabaseClient.auth.getSession();
+                
+                if (!session) {
+                    // Si l'appareil n'est pas autorisé, on affiche l'écran de connexion admin
+                    document.getElementById('ecran-dashboard').classList.add('hidden');
+                    document.getElementById('ecran-login-supabase').classList.remove('hidden');
+                    document.getElementById('ecran-login-supabase').classList.add('flex');
+                    return; // On stoppe le chargement ici
+                }
+
+                // 2. Si la session est active, on cache l'écran admin et on charge les cabinets
+                document.getElementById('ecran-login-supabase').classList.add('hidden');
+                document.getElementById('ecran-login-supabase').classList.remove('flex');
+                
                 const { data, error } = await supabaseClient.from('cabinets').select('*');
                 
                 if (error) throw error;
-
-                if (data && data.length > 0) {
-                    cabinetsConfig = data;
-                } else {
-                    cabinetsConfig = []; 
-                }
-            } catch (e) {
-                console.error("Erreur de chargement Supabase :", e);
+                
+                cabinetsConfig = data || [];
+                document.getElementById('ecran-dashboard').classList.remove('hidden');
+                renderCabinetsDashboard(); 
+                
+            } catch (err) {
+                console.error("Erreur de chargement des cabinets :", err);
             }
+        }
 
-            // On met à jour le menu déroulant du header de l'application
-            const headerSelect = document.getElementById('globalCabinetFilter');
-            if (headerSelect) {
-                // On utilise bien cab.nom ici
-                headerSelect.innerHTML = cabinetsConfig.map(cab => `<option value="${cab.id}">${cab.nom}</option>`).join('');
-            }
+        // Fonction déclenchée par le bouton "Autoriser cet appareil"
+        async function loginSupabase() {
+            const email = document.getElementById('sup-email').value;
+            const pwd = document.getElementById('sup-pwd').value;
             
-            // Si on est déjà sur le dashboard des cabinets, on le met à jour
-            if (!document.getElementById('ecran-dashboard').classList.contains('hidden')) {
-                renderCabinetsDashboard();
+            if(!email || !pwd) { alert("Veuillez remplir les deux champs."); return; }
+            
+            document.body.style.cursor = 'wait';
+            
+            const { error } = await supabaseClient.auth.signInWithPassword({
+                email: email,
+                password: pwd
+            });
+            
+            document.body.style.cursor = 'default';
+            
+            if (error) {
+                alert("❌ Identifiants incorrects. Accès refusé.");
+            } else {
+                // Si c'est bon, on relance le chargement (qui cette fois passera)
+                loadCabinetsConfig(); 
             }
         }
 
