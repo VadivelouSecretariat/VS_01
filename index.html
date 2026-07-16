@@ -2373,9 +2373,12 @@
                 
                 let partsNIR = textAfter.split(/\b\d{13,15}\b/);
                 let amountArea = partsNIR.length > 1 ? partsNIR[1] : textAfter;
-                amountArea = amountArea.split(/facture(?:\(s\))? dans ce lot/i)[0]; 
                 
-                let amounts = amountArea.match(/\b\d+,\d{2}\b/g);
+                // CORRECTION 1 : Prise en compte du mot "regroupées" pour couper la zone de recherche
+                amountArea = amountArea.split(/factures?\s+(?:regroup[eé]es\s+)?dans ce lot/i)[0]; 
+                
+                // CORRECTION 2 : Tolérance pour les décimales avec un point (.) ou une virgule (,)
+                let amounts = amountArea.match(/\b\d+[,.]\d{2}\b/g);
                 let partRO = '0', partRC = '0';
                 
                 if (amounts) {
@@ -2385,7 +2388,12 @@
                     else if (amounts.length >= 4) { partRO = amounts[amounts.length - 3]; partRC = amounts[amounts.length - 2]; }
                 }
                 
-                fses.push({ numFSE: numFSE, patient: `${nom} ${prenom}`.trim(), partRO: partRO.replace(',', '.'), partRC: partRC.replace(',', '.') });
+                fses.push({ 
+                    numFSE: numFSE, 
+                    patient: `${nom} ${prenom}`.trim(), 
+                    partRO: partRO.replace(',', '.'), 
+                    partRC: partRC.replace(',', '.') 
+                });
             }
             return { lotNum, caisse, dateLot, isDegrade, fses };
         }
