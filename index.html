@@ -2698,7 +2698,6 @@
                 facturesToSave = releveSelectedFses.map(s => ({ fse: s.numFSE, montant: s.montant }));
                 totalMontantCalculated = currentTotal;
             } else {
-                // CORRECTION : Parcours strict des lignes et bouclier anti-doublons
                 let seenFse = new Set();
                 const rows = document.getElementById('noemieFacturesList').children;
                 
@@ -2711,7 +2710,6 @@
                         const montant = parseFloat((montantInput.value || '0').replace(',', '.')) || 0;
                         
                         if (fse || montant > 0) { 
-                            // On empêche techniquement toute facture de s'enregistrer deux fois
                             if (fse && fse !== '-' && seenFse.has(fse)) continue;
                             if (fse && fse !== '-') seenFse.add(fse);
                             
@@ -2734,6 +2732,7 @@
                 factures: facturesToSave, totalMontant: totalMontantCalculated, dateImport: new Date().toISOString()
             };
 
+            // 1. SAUVEGARDE DU RETOUR NOEMIE
             const { error: noemieError } = await supabaseClient.from('noemie').upsert([mapNoemieToDb(noemieObj)]);
             
             if (noemieError) {
@@ -2744,52 +2743,76 @@
             
             if (!currentNoemieEditId) {
                 noemieList.push(noemieObj);
-                const dEncaisse = encaisseStr || dateStr;
-                let fsesToUpdate = [];
-
-                if(isReleve) {
-                    releveSelectedFses.forEach(sel => {
-                        let linkedFse = fseList.find(f => f.id === sel.id);
-                        if(linkedFse) {
-                            if(sel.isRC) { linkedFse.checkRC = true; linkedFse.dateVirementRC = dEncaisse; }
-                            else { linkedFse.checkRO = true; linkedFse.dateVirementRO = dEncaisse; }
-                            linkedFse.isLocked = (linkedFse.checkRO && linkedFse.checkRC);
-                            fsesToUpdate.push(mapFseToDb(linkedFse));
-                        }
-                    });
-                } else {
-                    facturesToSave.forEach(fac => {
-                        let fVal = fac.fse, mVal = fac.montant;
-                        if (!fVal || fVal === '-') return;
-                        
-                        let linkedFse = fseList.find(f => f.numFSE === fVal && f.praticien === targetPraticien && !f.isDefacture);
-                        if (!linkedFse) linkedFse = fseList.find(f => f.numFSE === fVal && !f.isDefacture);
-                        
-                        if (linkedFse) {
-                            let isRoMatch = Math.abs(mVal - linkedFse.partRO) <= 0.01;
-                            let isRcMatch = Math.abs(mVal - linkedFse.partRC) <= 0.01;
-                            let isGlobalMatch = Math.abs(mVal - (linkedFse.partRO + linkedFse.partRC)) <= 0.01;
-                            let changed = false;
-
-                            if (isGlobalMatch) { linkedFse.checkRO = true; linkedFse.dateVirementRO = dEncaisse; linkedFse.checkRC = true; linkedFse.dateVirementRC = dEncaisse; changed = true; } 
-                            else if (isRoMatch && !linkedFse.checkRO) { linkedFse.checkRO = true; linkedFse.dateVirementRO = dEncaisse; changed = true; } 
-                            else if (isRcMatch && !linkedFse.checkRC) { linkedFse.checkRC = true; linkedFse.dateVirementRC = dEncaisse; changed = true; } 
-                            else { if(mVal > 0) { linkedFse.checkRO = true; linkedFse.dateVirementRO = dEncaisse; changed = true; } }
-
-                            if(changed) { linkedFse.isLocked = (linkedFse.checkRO && linkedFse.checkRC); fsesToUpdate.push(mapFseToDb(linkedFse)); }
-                        }
-                    });
-                }
-
-                if (fsesToUpdate.length > 0) {
-                    await supabaseClient.from('fse').upsert(fsesToUpdate);
-                }
-                
-                
             } else {
                 const idx = noemieList.findIndex(n => n.id === currentNoemieEditId);
                 if(idx > -1) noemieList[idx] = noemieObj;
             }
+
+            // =========================================================
+            // 2. MOTEUR DE POINTAGE DES FSE (Actif en Création ET Édition)
+            // =========================================================
+            const dEncaisse = encaisseStr || dateStr;
+            let fsesToUpdate = [];
+
+            if(isReleve) {
+                releveSelectedFses.forEach(sel => {
+                    let linkedFse = fseList.find(f => f.id === sel.id);
+                    if(linkedFse) {
+                        if(sel.isRC) { linkedFse.checkRC = true; linkedFse.dateVirementRC = dEncaisse; }
+                        else { linkedFse.checkRO = true; linkedFse.dateVirementRO = dEncaisse; }
+                        linkedFse.isLocked = (linkedFse.checkRO && linkedFse.checkRC);
+                        fsesToUpdate.push(mapFseToDb(linkedFse));
+                    }
+                });
+            } else {
+                facturesToSave.forEach(fac => {
+                    let fVal = fac.fse, mVal = fac.montant;
+                    if (!fVal || fVal === '-') return;
+                    
+                    let linkedFse = fseList.find(f => f.numFSE === fVal && f.praticien === targetPraticien && !f.isDefacture);
+                    if (!linkedFse) linkedFse = fseList.find(f => f.numFSE === fVal && !f.isDefacture);
+                    
+                    if (linkedFse) {
+                        let isRoMatch = Math.abs(mVal - linkedFse.partRO) <= 0.01;
+                        let isRcMatch = Math.abs(mVal - linkedFse.partRC) <= 0.01;
+                        let isGlobalMatch = Math.abs(mVal - (linkedFse.partRO + linkedFse.partRC)) <= 0.01;
+                        let changed = false;
+
+                        if (isGlobalMatch) { 
+                            linkedFse.checkRO = true; linkedFse.dateVirementRO = dEncaisse; 
+                            linkedFse.checkRC = true; linkedFse.dateVirementRC = dEncaisse; 
+                            changed = true; 
+                        } 
+                        else if (isRoMatch && !linkedFse.checkRO) { 
+                            linkedFse.checkRO = true; linkedFse.dateVirementRO = dEncaisse; 
+                            changed = true; 
+                        } 
+                        else if (isRcMatch && !linkedFse.checkRC) { 
+                            linkedFse.checkRC = true; linkedFse.dateVirementRC = dEncaisse; 
+                            changed = true; 
+                        } 
+                        else if (mVal > 0 && !linkedFse.checkRO) { 
+                            // Tolérance pour les paiements partiels (retenues)
+                            linkedFse.checkRO = true; linkedFse.dateVirementRO = dEncaisse; 
+                            changed = true; 
+                        }
+
+                        if(changed) { 
+                            linkedFse.isLocked = (linkedFse.checkRO && linkedFse.checkRC); 
+                            fsesToUpdate.push(mapFseToDb(linkedFse)); 
+                        }
+                    }
+                });
+            }
+
+            // Envoi à Supabase avec détection des erreurs silencieuses
+            if (fsesToUpdate.length > 0) {
+                const { error: fseError } = await supabaseClient.from('fse').upsert(fsesToUpdate);
+                if (fseError) {
+                    alert("⚠️ Attention : Supabase a bloqué le pointage des FSE. Le format de la date d'encaissement est peut-être incorrect.\n\nDétail de l'erreur : " + fseError.message);
+                }
+            }
+            // =========================================================
 
             document.body.style.cursor = 'default';
             
