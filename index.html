@@ -2751,7 +2751,7 @@
             // =========================================================
             // 2. MOTEUR DE POINTAGE DES FSE (Actif en Création ET Édition)
             // =========================================================
-            const dEncaisse = encaisseStr || dateStr;
+            const dEncaisse = encaisseStr || dateStr || null;
             let fsesToUpdate = [];
 
             if(isReleve) {
@@ -2805,11 +2805,27 @@
                 });
             }
 
-            // Envoi à Supabase avec détection des erreurs silencieuses
+            // =========================================================
+            // ENVOI À SUPABASE AVEC NETTOYAGE STRICT DES DATES
+            // =========================================================
             if (fsesToUpdate.length > 0) {
-                const { error: fseError } = await supabaseClient.from('fse').upsert(fsesToUpdate);
+                
+                // LE BOUCLIER : On force les chaînes vides à devenir "null"
+                let fsesCleaned = fsesToUpdate.map(f => {
+                    let clean = { ...f };
+                    // Vérification version snake_case (standard BDD)
+                    if (clean.date_virement_ro === "") clean.date_virement_ro = null;
+                    if (clean.date_virement_rc === "") clean.date_virement_rc = null;
+                    // Vérification version camelCase (au cas où)
+                    if (clean.dateVirementRO === "") clean.dateVirementRO = null;
+                    if (clean.dateVirementRC === "") clean.dateVirementRC = null;
+                    return clean;
+                });
+
+                const { error: fseError } = await supabaseClient.from('fse').upsert(fsesCleaned);
+                
                 if (fseError) {
-                    alert("⚠️ Attention : Supabase a bloqué le pointage des FSE. Le format de la date d'encaissement est peut-être incorrect.\n\nDétail de l'erreur : " + fseError.message);
+                    alert("⚠️ Attention : Supabase a bloqué le pointage des FSE.\nDétail de l'erreur : " + fseError.message);
                 }
             }
             // =========================================================
