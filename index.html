@@ -2785,10 +2785,7 @@
                     await supabaseClient.from('fse').upsert(fsesToUpdate);
                 }
                 
-                // AJOUT : Ouverture de la mini-modale pour le N° de relevé si une date d'encaissement a été saisie sur un NOEMIE standard
-                if (encaisseStr && !isReleve && typeof openMiniReleveModal === 'function') {
-                    openMiniReleveModal(noemieObj.id);
-                }
+                
             } else {
                 const idx = noemieList.findIndex(n => n.id === currentNoemieEditId);
                 if(idx > -1) noemieList[idx] = noemieObj;
