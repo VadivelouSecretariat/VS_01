@@ -2677,9 +2677,10 @@
             const gPrat = document.getElementById('globalPraticienFilter') ? document.getElementById('globalPraticienFilter').value : 'ALL';
             let targetPraticien = gPrat !== 'ALL' ? gPrat : (praticiensList.length > 0 ? praticiensList[0].name : '');
             
-            const dateStr = document.getElementById('n_date').value;
+            // LE BOUCLIER DÈS LA SOURCE : On force 'null' si les champs de date sont vides
+            const dateStr = document.getElementById('n_date').value || null;
             const caisseStr = document.getElementById('n_caisse').value.trim() || '-';
-            const encaisseStr = document.getElementById('n_encaisse').value;
+            const encaisseStr = document.getElementById('n_encaisse').value || null;
             const releveStr = document.getElementById('n_releve').value.trim() || '-';
             const infoStr = document.getElementById('n_info').value.trim();
             const isNoemie = document.getElementById('cat_noemie').checked;
@@ -2728,19 +2729,31 @@
                 cabinet: currentCabinet,
                 catNoemie: isNoemie, catJustif: isJustif, catReleve: isReleve,
                 praticien: targetPraticien,
-                dateNoemie: dateStr, caisse: caisseStr, encaisseLe: encaisseStr, releve: releveStr, info: infoStr,
-                factures: facturesToSave, totalMontant: totalMontantCalculated, dateImport: new Date().toISOString()
+                dateNoemie: dateStr, 
+                caisse: caisseStr, 
+                encaisseLe: encaisseStr, 
+                releve: releveStr, 
+                info: infoStr,
+                factures: facturesToSave, 
+                totalMontant: totalMontantCalculated, 
+                dateImport: new Date().toISOString()
             };
 
             // 1. SAUVEGARDE DU RETOUR NOEMIE
-            const { error: noemieError } = await supabaseClient.from('noemie').upsert([mapNoemieToDb(noemieObj)]);
+            // Le .select() force Supabase à nous prouver qu'il a bien écrit la ligne
+            const { data: noemieData, error: noemieError } = await supabaseClient.from('noemie').upsert([mapNoemieToDb(noemieObj)]).select();
             
             if (noemieError) {
                 document.body.style.cursor = 'default';
                 alert("❌ Supabase a refusé l'enregistrement NOEMIE :\n" + noemieError.message);
                 return;
+            } else if (!noemieData || noemieData.length === 0) {
+                document.body.style.cursor = 'default';
+                alert("⚠️ Blocage Silencieux : Supabase n'a renvoyé aucune erreur, mais n'a rien enregistré. Vérifie le RLS (Row Level Security) sur la table 'noemie' !");
+                return;
             }
             
+                      
             if (!currentNoemieEditId) {
                 noemieList.push(noemieObj);
             } else {
@@ -2749,7 +2762,7 @@
             }
 
             // =========================================================
-            // 2. MOTEUR DE POINTAGE DES FSE (Actif en Création ET Édition)
+            // 2. MOTEUR DE POINTAGE DES FSE 
             // =========================================================
             const dEncaisse = encaisseStr || dateStr || null;
             let fsesToUpdate = [];
@@ -2792,7 +2805,6 @@
                             changed = true; 
                         } 
                         else if (mVal > 0 && !linkedFse.checkRO) { 
-                            // Tolérance pour les paiements partiels (retenues)
                             linkedFse.checkRO = true; linkedFse.dateVirementRO = dEncaisse; 
                             changed = true; 
                         }
@@ -2805,30 +2817,22 @@
                 });
             }
 
-            // =========================================================
-            // ENVOI À SUPABASE AVEC NETTOYAGE STRICT DES DATES
-            // =========================================================
+            // Envoi à Supabase avec le filtre anti-chaîne vide pour les dates FSE
             if (fsesToUpdate.length > 0) {
-                
-                // LE BOUCLIER : On force les chaînes vides à devenir "null"
                 let fsesCleaned = fsesToUpdate.map(f => {
                     let clean = { ...f };
-                    // Vérification version snake_case (standard BDD)
                     if (clean.date_virement_ro === "") clean.date_virement_ro = null;
                     if (clean.date_virement_rc === "") clean.date_virement_rc = null;
-                    // Vérification version camelCase (au cas où)
                     if (clean.dateVirementRO === "") clean.dateVirementRO = null;
                     if (clean.dateVirementRC === "") clean.dateVirementRC = null;
                     return clean;
                 });
 
                 const { error: fseError } = await supabaseClient.from('fse').upsert(fsesCleaned);
-                
                 if (fseError) {
                     alert("⚠️ Attention : Supabase a bloqué le pointage des FSE.\nDétail de l'erreur : " + fseError.message);
                 }
             }
-            // =========================================================
 
             document.body.style.cursor = 'default';
             
