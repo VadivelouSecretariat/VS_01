@@ -2564,13 +2564,23 @@
         function addNoemieFactureRow(fseNum='', mnt='') {
             const container = document.getElementById('noemieFacturesList');
             const row = document.createElement('div');
-            row.className = "flex items-center gap-2 mb-1 p-1 bg-white border border-teal-100 rounded shadow-sm";
+            
+            // 1. On passe le conteneur principal en colonne (flex-col) et on ajuste le padding
+            row.className = "flex flex-col mb-2 p-2 bg-white border border-teal-100 rounded-lg shadow-sm"; 
+            
+            // 2. On sépare la zone de saisie (en haut) et la zone des badges (en bas)
             row.innerHTML = `
-                <input type="text" value="${fseNum}" class="fse-input w-32 border border-teal-200 rounded p-1.5 text-xs font-mono focus:ring-teal-500" placeholder="N° FSE">
-                <input type="text" inputmode="decimal" value="${mnt}" oninput="updateNoemieTotal()" class="montant-input w-24 border border-indigo-200 rounded p-1.5 text-xs font-bold text-indigo-700 focus:ring-indigo-500 text-right" placeholder="0.00 €">
-                <button type="button" onclick="this.parentElement.remove(); updateNoemieTotal();" class="text-rose-400 hover:text-rose-600 font-bold px-2 py-1 bg-rose-50 rounded" tabindex="-1">×</button>
+                <div class="flex items-center gap-2">
+                    <input type="text" value="${fseNum}" class="fse-input w-32 border border-teal-200 rounded p-1.5 text-xs font-mono focus:ring-teal-500" placeholder="N° FSE">
+                    <input type="text" inputmode="decimal" value="${mnt}" oninput="updateNoemieTotal()" class="montant-input flex-1 border border-indigo-200 rounded p-1.5 text-xs font-bold text-indigo-700 focus:ring-indigo-500 text-right" placeholder="0.00">
+                    <button type="button" onclick="this.parentElement.parentElement.remove(); updateNoemieTotal();" class="text-rose-400 hover:text-rose-600 font-bold px-2 py-1 bg-rose-50 rounded" tabindex="-1">×</button>
+                </div>
+                <!-- Injection intelligente des badges du patient -->
+                ${getPatientBadgesHtml(fseNum, mnt)}
             `;
-            container.appendChild(row); updateNoemieTotal();
+            
+            container.appendChild(row); 
+            updateNoemieTotal();
         }
 
         function updateNoemieTotal() {
@@ -2825,9 +2835,15 @@
             let cleanText = text.replace(/[\r\n]/g, ' ').replace(/\s+/g, ' ');
             
             let caisse = '';
-            let matchCaisse = cleanText.match(/(CPAM|CGSS|MGEN|MSA|CAF)[a-zA-ZÀ-ÿ\s-]+?(?=\s+le|\s+pour|\s+du|$)/i);
-            if (matchCaisse) caisse = matchCaisse[0].trim();
-            else { let m = cleanText.match(/(?:caisse|organisme)\s*:\s*([a-zA-ZÀ-ÿ\s-]+)/i); if(m) caisse = m[1].trim(); }
+            // On cherche tout ce qui est écrit entre "Envoyé par" et " le [date]" ou " pour [patient]"
+            let matchCaisse = cleanText.match(/Envoy[eé]\s+par\s+([a-zA-ZÀ-ÿ\s-]+?)(?=\s+le\s+\d|\s+pour\s+|$)/i);
+            if (matchCaisse) {
+                caisse = matchCaisse[1].trim();
+            } else { 
+                // Sécurité de secours si le format varie
+                let m = cleanText.match(/(?:caisse|organisme)\s*:\s*([a-zA-ZÀ-ÿ\s-]+)/i); 
+                if(m) caisse = m[1].trim(); 
+            }
 
             let dateReglement = '';
             let matchDate = cleanText.match(/r[eé]glement\s*(?:du|le)?\s*(\d{2}\/\d{2}\/\d{4})/i) || cleanText.match(/Date\s*(?:\:)?\s*(\d{2}\/\d{2}\/\d{4})/i) || cleanText.match(/(?:Envoy[eé]|Imprim[eé]).*?(\d{2}\/\d{2}\/\d{4})/i);
@@ -3955,6 +3971,48 @@
             if (diff === 0 && target > 0) resteEl.className = "font-black text-emerald-600";
             else if (diff < 0) resteEl.className = "font-black text-rose-600";
             else resteEl.className = "font-black text-gray-400";
+        }
+
+        function getPatientBadgesHtml(numFSE, montantSaisi) {
+            if (!numFSE || !fseList) return '';
+            
+            // On cherche la facture correspondante dans la base
+            let fse = fseList.find(f => f.numFSE === numFSE);
+            if (!fse) return ''; 
+            
+            let html = `<div class="mt-1.5 flex items-center gap-2 text-[10px] font-bold uppercase">`;
+            html += `<span class="text-gray-700 truncate max-w-[180px]">${fse.patient}</span>`;
+            
+            let montant = parseFloat(montantSaisi) || 0;
+
+            // --- LOGIQUE BADGE RO ---
+            if (fse.partRO > 0) {
+                let roClass = "bg-gray-100 text-gray-400 border border-gray-200"; // Par défaut (En attente)
+                
+                if (fse.checkRO) {
+                    roClass = "border border-orange-500 text-orange-600 bg-orange-50"; // Déjà réglée (Capture)
+                } else if (Math.abs(montant - fse.partRO) < 0.01 || Math.abs(montant - (fse.partRO + fse.partRC)) < 0.01) {
+                    roClass = "border border-emerald-500 text-emerald-600 bg-emerald-50"; // Part trouvée (Vert)
+                }
+                
+                html += `<span class="px-1.5 py-0.5 rounded ${roClass}">RO : ${fse.partRO.toFixed(2)}€</span>`;
+            }
+            
+            // --- LOGIQUE BADGE RC ---
+            if (fse.partRC > 0) {
+                let rcClass = "bg-gray-100 text-gray-400 border border-gray-200"; // Par défaut (En attente)
+                
+                if (fse.checkRC) {
+                    rcClass = "border border-orange-500 text-orange-600 bg-orange-50"; // Déjà réglée (Capture)
+                } else if (Math.abs(montant - fse.partRC) < 0.01 || Math.abs(montant - (fse.partRO + fse.partRC)) < 0.01) {
+                    rcClass = "border border-blue-500 text-blue-600 bg-blue-50"; // Part trouvée (Bleu)
+                }
+                
+                html += `<span class="px-1.5 py-0.5 rounded ${rcClass}">RC : ${fse.partRC.toFixed(2)}€</span>`;
+            }
+            
+            html += `</div>`;
+            return html;
         }
 
         // Fonctions pour fermer les modales (au cas où elles manqueraient)
