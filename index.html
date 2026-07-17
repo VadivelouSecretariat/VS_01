@@ -2698,21 +2698,33 @@
                 facturesToSave = releveSelectedFses.map(s => ({ fse: s.numFSE, montant: s.montant }));
                 totalMontantCalculated = currentTotal;
             } else {
-                document.querySelectorAll('#noemieFacturesList .flex').forEach(row => {
-                    const fseInput = row.querySelector('.fse-input');
-                    const montantInput = row.querySelector('.montant-input');
+                // CORRECTION : Parcours strict des lignes et bouclier anti-doublons
+                let seenFse = new Set();
+                const rows = document.getElementById('noemieFacturesList').children;
+                
+                for (let i = 0; i < rows.length; i++) {
+                    const fseInput = rows[i].querySelector('.fse-input');
+                    const montantInput = rows[i].querySelector('.montant-input');
+                    
                     if(fseInput && montantInput) {
                         const fse = fseInput.value.trim().toUpperCase();
                         const montant = parseFloat((montantInput.value || '0').replace(',', '.')) || 0;
-                        if (fse || montant > 0) { facturesToSave.push({ fse: fse || '-', montant: montant }); totalMontantCalculated += montant; }
+                        
+                        if (fse || montant > 0) { 
+                            // On empêche techniquement toute facture de s'enregistrer deux fois
+                            if (fse && fse !== '-' && seenFse.has(fse)) continue;
+                            if (fse && fse !== '-') seenFse.add(fse);
+                            
+                            facturesToSave.push({ fse: fse || '-', montant: montant }); 
+                            totalMontantCalculated += montant; 
+                        }
                     }
-                });
+                }
                 if (facturesToSave.length === 0) { alert("Veuillez saisir au moins une facture ou un montant."); return; }
             }
 
             document.body.style.cursor = 'wait';
             
-            // CORRECTION 1 : Génération d'un UUID valide
             const noemieObj = {
                 id: currentNoemieEditId || generateUUID(),
                 cabinet: currentCabinet,
@@ -2722,7 +2734,6 @@
                 factures: facturesToSave, totalMontant: totalMontantCalculated, dateImport: new Date().toISOString()
             };
 
-            // CORRECTION 2 : Envoi direct et vérification stricte
             const { error: noemieError } = await supabaseClient.from('noemie').upsert([mapNoemieToDb(noemieObj)]);
             
             if (noemieError) {
@@ -2772,6 +2783,11 @@
 
                 if (fsesToUpdate.length > 0) {
                     await supabaseClient.from('fse').upsert(fsesToUpdate);
+                }
+                
+                // AJOUT : Ouverture de la mini-modale pour le N° de relevé si une date d'encaissement a été saisie sur un NOEMIE standard
+                if (encaisseStr && !isReleve && typeof openMiniReleveModal === 'function') {
+                    openMiniReleveModal(noemieObj.id);
                 }
             } else {
                 const idx = noemieList.findIndex(n => n.id === currentNoemieEditId);
@@ -4013,6 +4029,62 @@
             
             html += `</div>`;
             return html;
+        }
+
+        // ==========================================
+        // MOTEUR DE POINTAGE CENTRALISÉ
+        // ==========================================
+        async function automatiserPointageFSE(facturesSaisies, datePaiement, praticienActif) {
+            // S'il n'y a pas de date d'encaissement saisie, on ne pointe rien
+            if (!datePaiement || datePaiement.trim() === '') return;
+            
+            let fsesToUpdate = [];
+
+            facturesSaisies.forEach(fac => {
+                // 1. On cherche la FSE correspondante dans la base en mémoire
+                let linkedFse = fseList.find(f => f.numFSE === fac.fse && f.praticien === praticienActif && !f.isDefacture);
+                if (!linkedFse) linkedFse = fseList.find(f => f.numFSE === fac.fse && !f.isDefacture);
+                
+                if (linkedFse) {
+                    let mVal = parseFloat(fac.montant);
+                    let isRoMatch = Math.abs(mVal - linkedFse.partRO) <= 0.01;
+                    let isRcMatch = Math.abs(mVal - linkedFse.partRC) <= 0.01;
+                    let isGlobalMatch = Math.abs(mVal - (linkedFse.partRO + linkedFse.partRC)) <= 0.01;
+                    let changed = false;
+
+                    // 2. Validation intelligente des parts (Vert / Bleu / Les deux)
+                    if (isGlobalMatch) { 
+                        if (!linkedFse.checkRO) { linkedFse.checkRO = true; linkedFse.dateVirementRO = datePaiement; changed = true; }
+                        if (!linkedFse.checkRC) { linkedFse.checkRC = true; linkedFse.dateVirementRC = datePaiement; changed = true; }
+                    } 
+                    else if (isRoMatch && !linkedFse.checkRO) { 
+                        linkedFse.checkRO = true; linkedFse.dateVirementRO = datePaiement; changed = true; 
+                    } 
+                    else if (isRcMatch && !linkedFse.checkRC) { 
+                        linkedFse.checkRC = true; linkedFse.dateVirementRC = datePaiement; changed = true; 
+                    } 
+                    else if (mVal > 0 && !linkedFse.checkRO) { 
+                        // Tolérance pour les retenues : on valide le RO par défaut si paiement partiel
+                        linkedFse.checkRO = true; linkedFse.dateVirementRO = datePaiement; changed = true; 
+                    }
+
+                    if(changed) { 
+                        linkedFse.isLocked = (linkedFse.checkRO && linkedFse.checkRC); 
+                        fsesToUpdate.push(mapFseToDb(linkedFse)); // Prépare pour Supabase
+                    }
+                }
+            });
+
+            // 3. Envoi groupé à Supabase
+            if (fsesToUpdate.length > 0) {
+                const { error } = await supabaseClient.from('fse').upsert(fsesToUpdate);
+                if (error) {
+                    console.error("Erreur de pointage auto :", error.message);
+                } else {
+                    // Si on a la fonction render(), on rafraîchit le tableau des FSE
+                    if (typeof render === 'function') render(); 
+                }
+            }
         }
 
         // Fonctions pour fermer les modales (au cas où elles manqueraient)
