@@ -2677,7 +2677,6 @@
             const gPrat = document.getElementById('globalPraticienFilter') ? document.getElementById('globalPraticienFilter').value : 'ALL';
             let targetPraticien = gPrat !== 'ALL' ? gPrat : (praticiensList.length > 0 ? praticiensList[0].name : '');
             
-            // LE BOUCLIER DÈS LA SOURCE : On force 'null' si les champs de date sont vides
             const dateStr = document.getElementById('n_date').value || null;
             const caisseStr = document.getElementById('n_caisse').value.trim() || '-';
             const encaisseStr = document.getElementById('n_encaisse').value || null;
@@ -2739,8 +2738,6 @@
                 dateImport: new Date().toISOString()
             };
 
-            // 1. SAUVEGARDE DU RETOUR NOEMIE
-            // Le .select() force Supabase à nous prouver qu'il a bien écrit la ligne
             const { data: noemieData, error: noemieError } = await supabaseClient.from('noemie').upsert([mapNoemieToDb(noemieObj)]).select();
             
             if (noemieError) {
@@ -2753,7 +2750,6 @@
                 return;
             }
             
-                      
             if (!currentNoemieEditId) {
                 noemieList.push(noemieObj);
             } else {
@@ -2764,7 +2760,8 @@
             // =========================================================
             // 2. MOTEUR DE POINTAGE DES FSE 
             // =========================================================
-            const dEncaisse = encaisseStr || dateStr || null;
+            // CORRECTION : On utilise STRICTEMENT la date d'encaissement saisie (ou rien)
+            const dEncaisse = encaisseStr || null; 
             let fsesToUpdate = [];
 
             if(isReleve) {
@@ -2817,7 +2814,6 @@
                 });
             }
 
-            // Envoi à Supabase avec le filtre anti-chaîne vide pour les dates FSE
             if (fsesToUpdate.length > 0) {
                 let fsesCleaned = fsesToUpdate.map(f => {
                     let clean = { ...f };
