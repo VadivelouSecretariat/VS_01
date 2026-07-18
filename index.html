@@ -3707,8 +3707,8 @@
             const { error } = await supabaseClient.from('noemie').update({ [dbField]: finalValue }).eq('id', id);
             if (error) { alert("Erreur : " + error.message); return; }
 
-            // L'AUTOMATISATION : Si on vient de saisir une date d'encaissement...
-            if (field === 'encaisseLe' && finalValue) {
+            // L'AUTOMATISATION DOUBLE SENS : Pointage ET Dépointage
+            if (field === 'encaisseLe') {
                 const n = noemieList[noemieIndex];
                 let fsesToUpdate = [];
 
@@ -3724,11 +3724,28 @@
                         let isGlobalMatch = Math.abs(mVal - (linkedFse.partRO + linkedFse.partRC)) <= 0.01;
                         let changed = false;
 
-                        // On valide intelligemment la bonne part
-                        if (isGlobalMatch) { linkedFse.checkRO = true; linkedFse.dateVirementRO = finalValue; linkedFse.checkRC = true; linkedFse.dateVirementRC = finalValue; changed = true; } 
-                        else if (isRoMatch && !linkedFse.checkRO) { linkedFse.checkRO = true; linkedFse.dateVirementRO = finalValue; changed = true; } 
-                        else if (isRcMatch && !linkedFse.checkRC) { linkedFse.checkRC = true; linkedFse.dateVirementRC = finalValue; changed = true; } 
-                        else if (mVal > 0) { linkedFse.checkRO = true; linkedFse.dateVirementRO = finalValue; changed = true; }
+                        if (finalValue) { 
+                            // ---- POINTAGE (Une date a été saisie) ----
+                            if (isGlobalMatch) { linkedFse.checkRO = true; linkedFse.dateVirementRO = finalValue; linkedFse.checkRC = true; linkedFse.dateVirementRC = finalValue; changed = true; } 
+                            else if (isRoMatch && !linkedFse.checkRO) { linkedFse.checkRO = true; linkedFse.dateVirementRO = finalValue; changed = true; } 
+                            else if (isRcMatch && !linkedFse.checkRC) { linkedFse.checkRC = true; linkedFse.dateVirementRC = finalValue; changed = true; } 
+                            else if (mVal > 0) { linkedFse.checkRO = true; linkedFse.dateVirementRO = finalValue; changed = true; }
+                        } else {
+                            // ---- DÉPOINTAGE (La date a été effacée) ----
+                            if (isGlobalMatch) { 
+                                if (linkedFse.checkRO || linkedFse.dateVirementRO) { linkedFse.checkRO = false; linkedFse.dateVirementRO = null; changed = true; }
+                                if (linkedFse.checkRC || linkedFse.dateVirementRC) { linkedFse.checkRC = false; linkedFse.dateVirementRC = null; changed = true; }
+                            } 
+                            else if (isRoMatch) { 
+                                if (linkedFse.checkRO || linkedFse.dateVirementRO) { linkedFse.checkRO = false; linkedFse.dateVirementRO = null; changed = true; }
+                            } 
+                            else if (isRcMatch) { 
+                                if (linkedFse.checkRC || linkedFse.dateVirementRC) { linkedFse.checkRC = false; linkedFse.dateVirementRC = null; changed = true; }
+                            } 
+                            else if (mVal > 0) { 
+                                if (linkedFse.checkRO || linkedFse.dateVirementRO) { linkedFse.checkRO = false; linkedFse.dateVirementRO = null; changed = true; }
+                            }
+                        }
 
                         if(changed) { 
                             linkedFse.isLocked = (linkedFse.checkRO && linkedFse.checkRC); 
@@ -3739,11 +3756,24 @@
 
                 // On envoie le lot de FSE mises à jour à Supabase
                 if (fsesToUpdate.length > 0) {
-                    await supabaseClient.from('fse').upsert(fsesToUpdate);
+                    // LE BOUCLIER ABSOLU pour protéger Supabase
+                    let fsesCleaned = fsesToUpdate.map(mapped => {
+                        Object.keys(mapped).forEach(key => {
+                            if (mapped[key] === "") mapped[key] = null;
+                        });
+                        return mapped;
+                    });
+                    
+                    await supabaseClient.from('fse').upsert(fsesCleaned);
+                    
+                    // Rafraîchir l'interface principale des FSE pour voir le dépointage en direct
+                    if (typeof render === 'function') render();
                 }
 
-                // Enfin, on ouvre la modale pour proposer la saisie du N° de relevé !
-                openMiniReleveModal(id);
+                // On n'ouvre la modale de relevé que si on ajoute une date (pas si on l'efface)
+                if (finalValue) {
+                    openMiniReleveModal(id);
+                }
             }
         }
 
