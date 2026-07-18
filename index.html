@@ -2795,9 +2795,8 @@
             }
 
             // =========================================================
-            // 2. MOTEUR DE POINTAGE DES FSE 
+            // 2. MOTEUR DE POINTAGE ET DÉPOINTAGE DES FSE 
             // =========================================================
-            // CORRECTION : On utilise STRICTEMENT la date d'encaissement saisie (ou rien)
             const dEncaisse = encaisseStr || null; 
             let fsesToUpdate = [];
 
@@ -2805,8 +2804,13 @@
                 releveSelectedFses.forEach(sel => {
                     let linkedFse = fseList.find(f => f.id === sel.id);
                     if(linkedFse) {
-                        if(sel.isRC) { linkedFse.checkRC = true; linkedFse.dateVirementRC = dEncaisse; }
-                        else { linkedFse.checkRO = true; linkedFse.dateVirementRO = dEncaisse; }
+                        if (dEncaisse) { // POINTAGE
+                            if(sel.isRC) { linkedFse.checkRC = true; linkedFse.dateVirementRC = dEncaisse; }
+                            else { linkedFse.checkRO = true; linkedFse.dateVirementRO = dEncaisse; }
+                        } else { // DÉPOINTAGE
+                            if(sel.isRC) { linkedFse.checkRC = false; linkedFse.dateVirementRC = null; }
+                            else { linkedFse.checkRO = false; linkedFse.dateVirementRO = null; }
+                        }
                         linkedFse.isLocked = (linkedFse.checkRO && linkedFse.checkRC);
                         fsesToUpdate.push(mapFseToDb(linkedFse));
                     }
@@ -2825,22 +2829,40 @@
                         let isGlobalMatch = Math.abs(mVal - (linkedFse.partRO + linkedFse.partRC)) <= 0.01;
                         let changed = false;
 
-                        if (isGlobalMatch) { 
-                            linkedFse.checkRO = true; linkedFse.dateVirementRO = dEncaisse; 
-                            linkedFse.checkRC = true; linkedFse.dateVirementRC = dEncaisse; 
-                            changed = true; 
-                        } 
-                        else if (isRoMatch && !linkedFse.checkRO) { 
-                            linkedFse.checkRO = true; linkedFse.dateVirementRO = dEncaisse; 
-                            changed = true; 
-                        } 
-                        else if (isRcMatch && !linkedFse.checkRC) { 
-                            linkedFse.checkRC = true; linkedFse.dateVirementRC = dEncaisse; 
-                            changed = true; 
-                        } 
-                        else if (mVal > 0 && !linkedFse.checkRO) { 
-                            linkedFse.checkRO = true; linkedFse.dateVirementRO = dEncaisse; 
-                            changed = true; 
+                        if (dEncaisse) { 
+                            // ---- POINTAGE AUTOMATIQUE ----
+                            if (isGlobalMatch) { 
+                                linkedFse.checkRO = true; linkedFse.dateVirementRO = dEncaisse; 
+                                linkedFse.checkRC = true; linkedFse.dateVirementRC = dEncaisse; 
+                                changed = true; 
+                            } 
+                            else if (isRoMatch && !linkedFse.checkRO) { 
+                                linkedFse.checkRO = true; linkedFse.dateVirementRO = dEncaisse; 
+                                changed = true; 
+                            } 
+                            else if (isRcMatch && !linkedFse.checkRC) { 
+                                linkedFse.checkRC = true; linkedFse.dateVirementRC = dEncaisse; 
+                                changed = true; 
+                            } 
+                            else if (mVal > 0 && !linkedFse.checkRO) { 
+                                linkedFse.checkRO = true; linkedFse.dateVirementRO = dEncaisse; 
+                                changed = true; 
+                            }
+                        } else {
+                            // ---- DÉPOINTAGE AUTOMATIQUE ----
+                            if (isGlobalMatch) { 
+                                if (linkedFse.checkRO || linkedFse.dateVirementRO) { linkedFse.checkRO = false; linkedFse.dateVirementRO = null; changed = true; }
+                                if (linkedFse.checkRC || linkedFse.dateVirementRC) { linkedFse.checkRC = false; linkedFse.dateVirementRC = null; changed = true; }
+                            } 
+                            else if (isRoMatch) { 
+                                if (linkedFse.checkRO || linkedFse.dateVirementRO) { linkedFse.checkRO = false; linkedFse.dateVirementRO = null; changed = true; }
+                            } 
+                            else if (isRcMatch) { 
+                                if (linkedFse.checkRC || linkedFse.dateVirementRC) { linkedFse.checkRC = false; linkedFse.dateVirementRC = null; changed = true; }
+                            } 
+                            else if (mVal > 0) { 
+                                if (linkedFse.checkRO || linkedFse.dateVirementRO) { linkedFse.checkRO = false; linkedFse.dateVirementRO = null; changed = true; }
+                            }
                         }
 
                         if(changed) { 
@@ -2852,13 +2874,12 @@
             }
 
             if (fsesToUpdate.length > 0) {
-                let fsesCleaned = fsesToUpdate.map(f => {
-                    let clean = { ...f };
-                    if (clean.date_virement_ro === "") clean.date_virement_ro = null;
-                    if (clean.date_virement_rc === "") clean.date_virement_rc = null;
-                    if (clean.dateVirementRO === "") clean.dateVirementRO = null;
-                    if (clean.dateVirementRC === "") clean.dateVirementRC = null;
-                    return clean;
+                // Application du BOUCLIER ABSOLU pour blinder l'envoi
+                let fsesCleaned = fsesToUpdate.map(mapped => {
+                    Object.keys(mapped).forEach(key => {
+                        if (mapped[key] === "") mapped[key] = null;
+                    });
+                    return mapped;
                 });
 
                 const { error: fseError } = await supabaseClient.from('fse').upsert(fsesCleaned);
