@@ -2215,15 +2215,40 @@
         async function editLotDetails(lotKey) {
             const fsesInLot = fseList.filter(f => `${f.date}_${f.lot}_${f.caisse}_${f.praticien}` === lotKey);
             if(fsesInLot.length === 0) return;
+            
             const first = fsesInLot[0];
             const newLot = prompt("MODIFIER LE LOT\nNouveau numéro de lot :", first.lot); if(newLot === null) return; 
             const newCaisse = prompt("Nouvelle caisse pour ce lot (ex: CPAM) :", first.caisse); if(newCaisse === null) return;
+            
             document.body.style.cursor = 'wait';
+            
             fsesInLot.forEach(f => { f.lot = newLot || '-'; f.caisse = newCaisse || '-'; });
-            const { error } = await supabaseClient.from('fse').upsert(fsesInLot.map(mapFseToDb));
+            
+            // LE BOUCLIER ABSOLU INTÉGRÉ
+            let fsesToUpdate = fsesInLot.map(f => {
+                let mapped = mapFseToDb(f);
+                
+                // On scanne et on nettoie toutes les propriétés vides
+                Object.keys(mapped).forEach(key => {
+                    if (mapped[key] === "") {
+                        mapped[key] = null;
+                    }
+                });
+                
+                return mapped;
+            });
+
+            const { error } = await supabaseClient.from('fse').upsert(fsesToUpdate);
+            
             document.body.style.cursor = 'default';
-            if (error) { alert("❌ Erreur lors de la modification : " + error.message); return; }
-            render(); updateDatalists();
+            
+            if (error) { 
+                alert("❌ Erreur lors de la modification : " + error.message); 
+                return; 
+            }
+            
+            render(); 
+            updateDatalists();
         }
 
         async function toggleRejet(id) {
