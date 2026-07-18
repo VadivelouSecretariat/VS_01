@@ -2466,7 +2466,19 @@
                 const trLot = document.createElement('tr'); trLot.className = `border-t-4 border-gray-300 font-bold ${lotBg}`;
                 trLot.innerHTML = `
                     <td class="p-2"><div class="flex items-center gap-1.5"><input type="checkbox" onchange="toggleLotDegrade('${lot.key}', this.checked)" ${lot.isDegrade ? 'checked' : ''} class="w-3.5 h-3.5 text-blue-600 rounded cursor-pointer"><span>${dLot}</span></div></td>
-                    <td class="p-2 truncate max-w-[100px]">${badgePrat}</td><td class="p-2"><div class="text-gray-800 flex items-center gap-2">${lot.lot} <button onclick="editLotDetails('${lot.key}')" class="text-blue-500 hover:text-blue-700 text-[10px] bg-blue-50 px-1.5 rounded border border-blue-200" title="Modifier le N° de Lot et la Caisse">✎</button></div><div class="text-[10px] text-teal-700 truncate max-w-[100px]">${lot.caisse}</div></td>
+                    <td class="p-2 truncate max-w-[100px]">${badgePrat}</td>
+                    <td class="p-2">
+                        <div class="text-gray-800 flex items-center gap-2">
+                            ${lot.lot} 
+                            <!-- Boutons d'action du Lot groupés -->
+                            <div class="flex gap-1">
+                                <button onclick="editLotDetails('${lot.key}')" class="text-blue-500 hover:text-blue-700 text-[10px] bg-blue-50 px-1.5 rounded border border-blue-200" title="Modifier le N° de Lot et la Caisse">✎</button>
+                                <button onclick="modifierDateLot('${lot.lot}')" class="text-blue-500 hover:text-blue-700 text-[10px] bg-blue-50 px-1.5 rounded border border-blue-200" title="Modifier la date de ce lot">📅 Date</button>
+                                <button onclick="supprimerLot('${lot.lot}')" class="text-red-500 hover:text-red-700 text-[10px] bg-red-50 px-1.5 rounded border border-red-200" title="Supprimer tout le lot">🗑️ Suppr.</button>
+                            </div>
+                        </div>
+                        <div class="text-[10px] text-teal-700 truncate max-w-[100px]">${lot.caisse}</div>
+                    </td>
                     <td class="p-2 text-center" colspan="3"><span class="px-2 py-0.5 rounded bg-gray-300 text-gray-700 text-[10px] shadow-sm">${nbActes} Facture(s)</span></td>
                     <td class="p-2 text-right text-teal-700 font-mono">${lot.tRO.toFixed(2)}€</td><td colspan="2"></td><td class="p-2 text-right text-indigo-700 font-mono">${lot.tRC.toFixed(2)}€</td><td colspan="2"></td>
                     <td class="p-2 text-right font-mono text-gray-800">${tGlobal.toFixed(2)}€</td><td class="p-2 text-right font-mono ${dGlobal > 0 ? 'text-rose-600' : 'text-emerald-700'}">${dGlobal.toFixed(2)}€</td><td></td>
@@ -2866,7 +2878,11 @@
                     
                     if (noemieData.dateReglement) {
                         let dParts = noemieData.dateReglement.split('/');
-                        if (dParts.length === 3) { document.getElementById('n_date').value = `${dParts[2]}-${dParts[1]}-${dParts[0]}`; document.getElementById('n_encaisse').value = `${dParts[2]}-${dParts[1]}-${dParts[0]}`; }
+                        // CORRECTION : On remplit n_date, mais on force n_encaisse à rester vide !
+                        if (dParts.length === 3) { 
+                            document.getElementById('n_date').value = `${dParts[2]}-${dParts[1]}-${dParts[0]}`; 
+                            document.getElementById('n_encaisse').value = ''; 
+                        }
                     }
                     if (noemieData.caisse) document.getElementById('n_caisse').value = noemieData.caisse;
                     if (noemieData.releve) document.getElementById('n_releve').value = noemieData.releve;
@@ -4120,6 +4136,62 @@
                     // Si on a la fonction render(), on rafraîchit le tableau des FSE
                     if (typeof render === 'function') render(); 
                 }
+            }
+        }
+
+        async function modifierDateLot(lotNum) {
+            // 1. On récupère toutes les factures de ce lot
+            const fsesDuLot = fseList.filter(f => f.numLot === lotNum);
+            if (fsesDuLot.length === 0) return;
+            
+            // 2. On demande la nouvelle date à l'utilisateur
+            const dateActuelle = fsesDuLot[0].dateLot || "";
+            const nouvelleDate = prompt(`Modifier la date pour TOUTES les factures du lot ${lotNum} (Format JJ/MM/AAAA) :`, dateActuelle);
+            
+            // Si on annule ou qu'on ne change rien, on stoppe
+            if (nouvelleDate === null || nouvelleDate.trim() === "" || nouvelleDate === dateActuelle) return;
+
+            document.body.style.cursor = 'wait';
+            
+            // 3. On prépare la mise à jour pour Supabase
+            let fsesToUpdate = fsesDuLot.map(f => {
+                f.dateLot = nouvelleDate.trim();
+                return mapFseToDb(f); // Utilise ta fonction de mapping habituelle
+            });
+
+            // 4. Envoi groupé
+            const { error } = await supabaseClient.from('fse').upsert(fsesToUpdate);
+            
+            document.body.style.cursor = 'default';
+
+            if (error) {
+                alert("❌ Erreur Supabase lors de la modification :\n" + error.message);
+            } else {
+                // On rafraîchit l'affichage
+                if (typeof render === 'function') render();
+            }
+        }
+
+        async function supprimerLot(lotNum) {
+            // 1. Avertissement de sécurité
+            if (!confirm(`⚠️ ATTENTION ⚠️\nVous êtes sur le point de supprimer DÉFINITIVEMENT toutes les factures du lot ${lotNum}.\n\nVoulez-vous vraiment continuer ?`)) return;
+
+            document.body.style.cursor = 'wait';
+            
+            // 2. Suppression dans Supabase
+            // Attention : Remplace 'num_lot' par le nom exact de ta colonne en base de données si différent (ex: 'numLot', 'lot')
+            const { error } = await supabaseClient.from('fse').delete().eq('num_lot', lotNum); 
+            
+            document.body.style.cursor = 'default';
+
+            if (error) {
+                alert("❌ Erreur lors de la suppression du lot :\n" + error.message);
+            } else {
+                // 3. On nettoie la mémoire locale
+                fseList = fseList.filter(f => f.numLot !== lotNum);
+                
+                // On rafraîchit l'affichage
+                if (typeof render === 'function') render();
             }
         }
 
