@@ -4140,7 +4140,7 @@
         }
 
         async function modifierDateLot(lotNum) {
-            // 1. On récupère les factures (basé sur la propriété exacte 'lot')
+            // 1. On récupère les factures du lot concerné
             const fsesDuLot = fseList.filter(f => f.lot === lotNum);
             if (fsesDuLot.length === 0) return;
             
@@ -4165,22 +4165,23 @@
 
             document.body.style.cursor = 'wait';
             
-            // 4. Préparation avec le BOUCLIER anti-vide
+            // 4. LE BOUCLIER ABSOLU
             let fsesToUpdate = fsesDuLot.map(f => {
-                f.date = isoDate; // Mise à jour de la date de la FSE
-                let mapped = mapFseToDb(f);
+                f.date = isoDate; // On applique la nouvelle date
+                let mapped = mapFseToDb(f); // On mappe pour la BDD
                 
-                // Nettoyage strict pour satisfaire Supabase
-                if (mapped.date_virement_ro === "") mapped.date_virement_ro = null;
-                if (mapped.date_virement_rc === "") mapped.date_virement_rc = null;
-                if (mapped.dateVirementRO === "") mapped.dateVirementRO = null;
-                if (mapped.dateVirementRC === "") mapped.dateVirementRC = null;
-                if (mapped.date === "") mapped.date = null;
+                // On scanne TOUTES les propriétés de l'objet sans exception.
+                // Si la valeur est "", on la remplace par null.
+                Object.keys(mapped).forEach(key => {
+                    if (mapped[key] === "") {
+                        mapped[key] = null;
+                    }
+                });
                 
                 return mapped;
             });
 
-            // 5. Envoi
+            // 5. Envoi groupé
             const { error } = await supabaseClient.from('fse').upsert(fsesToUpdate);
             
             document.body.style.cursor = 'default';
