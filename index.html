@@ -2468,13 +2468,13 @@
                     <td class="p-2"><div class="flex items-center gap-1.5"><input type="checkbox" onchange="toggleLotDegrade('${lot.key}', this.checked)" ${lot.isDegrade ? 'checked' : ''} class="w-3.5 h-3.5 text-blue-600 rounded cursor-pointer"><span>${dLot}</span></div></td>
                     <td class="p-2 truncate max-w-[100px]">${badgePrat}</td>
                     <td class="p-2">
-                        <div class="text-gray-800 flex items-center gap-2">
+                        <div class="text-gray-800 flex items-center gap-1.5">
                             ${lot.lot} 
-                            <!-- Boutons d'action du Lot groupés -->
-                            <div class="flex gap-1">
-                                <button onclick="editLotDetails('${lot.key}')" class="text-blue-500 hover:text-blue-700 text-[10px] bg-blue-50 px-1.5 rounded border border-blue-200" title="Modifier le N° de Lot et la Caisse">✎</button>
-                                <button onclick="modifierDateLot('${lot.lot}')" class="text-blue-500 hover:text-blue-700 text-[10px] bg-blue-50 px-1.5 rounded border border-blue-200" title="Modifier la date de ce lot">📅 Date</button>
-                                <button onclick="supprimerLot('${lot.lot}')" class="text-red-500 hover:text-red-700 text-[10px] bg-red-50 px-1.5 rounded border border-red-200" title="Supprimer tout le lot">🗑️ Suppr.</button>
+                            <!-- Boutons d'action du Lot format miniature -->
+                            <div class="flex gap-1 ml-1">
+                                <button onclick="editLotDetails('${lot.key}')" class="text-blue-500 hover:text-blue-700 text-[10px] bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 cursor-pointer" title="Modifier le N° de Lot et la Caisse">✎</button>
+                                <button onclick="modifierDateLot('${lot.lot}')" class="text-blue-500 hover:text-blue-700 text-[10px] bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 cursor-pointer" title="Modifier la date de ce lot">📅</button>
+                                <button onclick="supprimerLot('${lot.lot}')" class="text-red-500 hover:text-red-700 text-[10px] bg-red-50 px-1.5 py-0.5 rounded border border-red-200 cursor-pointer" title="Supprimer tout le lot">🗑️</button>
                             </div>
                         </div>
                         <div class="text-[10px] text-teal-700 truncate max-w-[100px]">${lot.caisse}</div>
@@ -4140,34 +4140,54 @@
         }
 
         async function modifierDateLot(lotNum) {
-            // 1. On récupère toutes les factures de ce lot
-            const fsesDuLot = fseList.filter(f => f.numLot === lotNum);
+            // 1. On récupère les factures (basé sur la propriété exacte 'lot')
+            const fsesDuLot = fseList.filter(f => f.lot === lotNum);
             if (fsesDuLot.length === 0) return;
             
-            // 2. On demande la nouvelle date à l'utilisateur
-            const dateActuelle = fsesDuLot[0].dateLot || "";
-            const nouvelleDate = prompt(`Modifier la date pour TOUTES les factures du lot ${lotNum} (Format JJ/MM/AAAA) :`, dateActuelle);
+            // 2. Formatage YYYY-MM-DD vers JJ/MM/AAAA pour la fenêtre de saisie
+            const dateActuelle = fsesDuLot[0].date || "";
+            let dateAffichee = dateActuelle;
+            if (dateActuelle.includes('-')) {
+                const parts = dateActuelle.split('-');
+                if(parts.length === 3) dateAffichee = `${parts[2]}/${parts[1]}/${parts[0]}`;
+            }
             
-            // Si on annule ou qu'on ne change rien, on stoppe
-            if (nouvelleDate === null || nouvelleDate.trim() === "" || nouvelleDate === dateActuelle) return;
+            const nouvelleDate = prompt(`Modifier la date pour TOUTES les factures du lot ${lotNum} (Format JJ/MM/AAAA) :`, dateAffichee);
+            
+            if (nouvelleDate === null || nouvelleDate.trim() === "" || nouvelleDate === dateAffichee) return;
+
+            // 3. Formatage JJ/MM/AAAA vers YYYY-MM-DD pour Supabase
+            let isoDate = nouvelleDate.trim();
+            if (isoDate.includes('/')) {
+                const p = isoDate.split('/');
+                if(p.length === 3) isoDate = `${p[2]}-${p[1]}-${p[0]}`;
+            }
 
             document.body.style.cursor = 'wait';
             
-            // 3. On prépare la mise à jour pour Supabase
+            // 4. Préparation avec le BOUCLIER anti-vide
             let fsesToUpdate = fsesDuLot.map(f => {
-                f.dateLot = nouvelleDate.trim();
-                return mapFseToDb(f); // Utilise ta fonction de mapping habituelle
+                f.date = isoDate; // Mise à jour de la date de la FSE
+                let mapped = mapFseToDb(f);
+                
+                // Nettoyage strict pour satisfaire Supabase
+                if (mapped.date_virement_ro === "") mapped.date_virement_ro = null;
+                if (mapped.date_virement_rc === "") mapped.date_virement_rc = null;
+                if (mapped.dateVirementRO === "") mapped.dateVirementRO = null;
+                if (mapped.dateVirementRC === "") mapped.dateVirementRC = null;
+                if (mapped.date === "") mapped.date = null;
+                
+                return mapped;
             });
 
-            // 4. Envoi groupé
+            // 5. Envoi
             const { error } = await supabaseClient.from('fse').upsert(fsesToUpdate);
             
             document.body.style.cursor = 'default';
 
             if (error) {
-                alert("❌ Erreur Supabase lors de la modification :\n" + error.message);
+                alert("❌ Erreur lors de la modification :\n" + error.message);
             } else {
-                // On rafraîchit l'affichage
                 if (typeof render === 'function') render();
             }
         }
