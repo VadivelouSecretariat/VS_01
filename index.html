@@ -455,7 +455,7 @@
                             <input type="file" id="noemie-pdf-file-input" multiple accept="application/pdf" class="hidden" onchange="processSelectedNoemiePDFs(event)">
                         </div>
                         
-                        <div class="bg-teal-50/40 p-4 rounded-lg border border-teal-200 md:w-2/3 mx-auto">
+                        <div class="bg-teal-50/40 p-4 rounded-lg border border-teal-200 w-full">
                             <div class="flex justify-between items-end mb-3 border-b border-teal-100 pb-2 gap-4">
                                 <label class="block text-xs font-bold text-teal-800 uppercase pb-1">Factures du retour</label>
                                 <div class="flex items-center gap-2">
@@ -466,20 +466,45 @@
                             </div>
                             <div id="noemieFacturesListContainer">
                             <div id="noemieFacturesList" class="space-y-2"></div>
-                            </div>
+                        </div>
                             <div id="releveSmartUI" class="hidden mt-4 border-t border-gray-200 pt-4">
-    <div class="border border-amber-200 rounded-lg p-4 bg-white shadow-sm mb-4">
-        <div class="flex justify-between items-center mb-4">
-            <div class="w-1/3">
-                <label class="block text-xs font-bold text-amber-700 uppercase mb-1">Montant global recherché (€)</label>
-                <input type="number" id="releveTargetAmount" step="0.01" class="w-full border-2 border-amber-300 rounded p-2 text-lg font-bold text-amber-900 focus:ring-amber-500 bg-amber-50" onkeyup="updateReleveTotals()">
-            </div>
-            <div class="w-2/3 flex justify-end items-center">
-                <label class="flex items-center space-x-2 text-sm font-medium text-gray-700 cursor-pointer">
-                    <input type="checkbox" id="releveIgnoreMutuelle" class="rounded text-amber-600 focus:ring-amber-500 w-5 h-5" onchange="renderReleveSmartList()">
-                    <span>Ignorer le filtre Mutuelle (Afficher toutes les FSE en attente)</span>
-                </label>
-            </div>
+                                <div class="border border-amber-200 rounded-lg p-4 bg-white shadow-sm mb-4">
+        
+                                <!-- Nouvel alignement : Champ et Case à cocher -->
+                                <div class="flex flex-wrap md:flex-nowrap items-end gap-4 mb-4">
+                                    <div class="w-full md:w-1/3">
+                                        <label class="block text-xs font-bold text-amber-700 uppercase mb-1">Montant global recherché (€)</label>
+                                        <input type="number" id="releveTargetAmount" step="0.01" class="w-full border-2 border-amber-300 rounded p-2 text-lg font-bold text-amber-900 focus:ring-amber-500 bg-amber-50" onkeyup="updateReleveTotals()">
+                                    </div>
+                                    <div class="w-full md:w-2/3 flex items-center bg-gray-50 border border-gray-200 px-3 py-2 rounded-lg cursor-pointer hover:bg-gray-100 transition h-[46px]">
+                                        <input type="checkbox" id="releveIgnoreMutuelle" class="rounded text-amber-600 focus:ring-amber-500 w-5 h-5 cursor-pointer" onchange="renderReleveSmartList()">
+                                        <label for="releveIgnoreMutuelle" class="ml-3 text-sm font-medium text-gray-700 cursor-pointer select-none w-full">Ignorer le filtre Mutuelle (Afficher toutes les FSE en attente)</label>
+                                    </div>
+                                </div>
+
+                                <div class="flex justify-between items-end mb-2 mt-2">
+                                    <div class="text-[10px] font-bold text-gray-400 uppercase">Factures disponibles au pointage</div>
+                                    <div class="text-[10px] font-bold text-gray-400 uppercase">Reste à payer</div>
+                                </div>
+
+                                <!-- Hauteur agrandie (max-h-96) -->
+                                <div id="releveFseList" class="max-h-96 overflow-y-auto custom-scrollbar border border-gray-200 rounded bg-gray-50 flex flex-col gap-1 p-1">
+                                    <!-- Rempli en Javascript -->
+                                </div>
+
+                                <div class="mt-4 bg-gray-50 border border-gray-200 rounded p-3 flex flex-wrap justify-end items-center gap-6">
+                                    <div class="text-sm text-gray-600">Cible : <span id="lblReleveCible" class="font-bold">0.00 €</span></div>
+                                    <div class="text-sm text-blue-600">Sélectionné : <span id="lblReleveSelect" class="font-bold">0.00 €</span></div>
+                                    <div class="text-lg text-gray-800">Reste à pointer : <span id="lblReleveReste" class="font-black text-gray-400">0.00 €</span></div>
+                                </div>
+                            </div>
+                        </div>
+                                <div class="w-2/3 flex justify-end items-center">
+                                    <label class="flex items-center space-x-2 text-sm font-medium text-gray-700 cursor-pointer">
+                                        <input type="checkbox" id="releveIgnoreMutuelle" class="rounded text-amber-600 focus:ring-amber-500 w-5 h-5" onchange="renderReleveSmartList()">
+                                        <span>Ignorer le filtre Mutuelle (Afficher toutes les FSE en attente)</span>
+                                    </label>
+                                </div>
         </div>
 
         <div class="flex justify-between items-end mb-2">
@@ -3175,42 +3200,107 @@
         // ==========================================
         async function toggleDefacture(id) { const item = fseList.find(f => f.id === id); if (item && !item.isLocked) { if (!item.isDefacture) { let remp = prompt("Facture annulée. \nNouveau N° de FSE de remplacement (Optionnel) :"); item.isDefacture = true; item.fseRemplacement = remp || "-"; item.checkRO = false; item.checkRC = false; } else { item.isDefacture = false; item.fseRemplacement = null; } await dbUpdateFse(item); render(); } }
 
-        function showFseDetailsModal(numFseTarget) {
-            const fseItems = fseList.filter(f => f.numFSE === numFseTarget).sort((a,b) => new Date(b.date) - new Date(a.date));
-            if(fseItems.length === 0) return;
-            const contentDiv = document.getElementById('fseDetailsContent'); contentDiv.innerHTML = '';
+        function showFseDetails(fseId) {
+            const fse = fseList.find(f => f.id === fseId);
+            if (!fse) return;
             
-            fseItems.forEach((f, idx) => {
-                const trRO = noemieList.find(n => n.factures.some(fac => fac.fse === f.numFSE && Math.abs(fac.montant - f.partRO) <= 0.01));
-                const trRC = noemieList.find(n => n.factures.some(fac => fac.fse === f.numFSE && Math.abs(fac.montant - f.partRC) <= 0.01));
-                const trGlobal = noemieList.find(n => n.factures.some(fac => fac.fse === f.numFSE && Math.abs(fac.montant - (f.partRO+f.partRC)) <= 0.01));
+            // Calcul des montants et statuts (0€ = considéré comme payé/soldé)
+            const isROPaye = fse.checkRO || fse.partRO === 0;
+            const isRCPaye = fse.checkRC || fse.partRC === 0;
+            const resteAPayer = (!isROPaye ? fse.partRO : 0) + (!isRCPaye ? fse.partRC : 0);
 
-                let infoRO = f.checkRO ? `<div class="text-[10px] text-emerald-600 mt-1">Payé le: ${f.dateVirementRO ? new Date(f.dateVirementRO).toLocaleDateString() : '?'}</div>` : `<div class="text-[10px] text-orange-500 mt-1">En attente</div>`;
-                if(trRO || trGlobal) { let ref = trRO || trGlobal; infoRO += `<div class="text-[9px] text-gray-500 mt-0.5">Ret: ${new Date(ref.dateNoemie).toLocaleDateString()} | Rel: ${ref.releve}</div>`; }
+            // Badges
+            const badgeRO = isROPaye 
+                ? `<span class="bg-emerald-100 text-emerald-600 font-black text-[10px] px-2.5 py-1 rounded uppercase tracking-wider">Payé</span>` 
+                : `<span class="bg-rose-100 text-rose-600 font-black text-[10px] px-2.5 py-1 rounded uppercase tracking-wider">En attente</span>`;
                 
-                let infoRC = f.checkRC ? `<div class="text-[10px] text-emerald-600 mt-1">Payé le: ${f.dateVirementRC ? new Date(f.dateVirementRC).toLocaleDateString() : '?'}</div>` : `<div class="text-[10px] text-orange-500 mt-1">En attente</div>`;
-                if(trRC || trGlobal) { let ref = trRC || trGlobal; infoRC += `<div class="text-[9px] text-gray-500 mt-0.5">Ret: ${new Date(ref.dateNoemie).toLocaleDateString()} | Rel: ${ref.releve}</div>`; }
+            const badgeRC = isRCPaye 
+                ? `<span class="bg-emerald-100 text-emerald-600 font-black text-[10px] px-2.5 py-1 rounded uppercase tracking-wider">Payé</span>` 
+                : `<span class="bg-rose-100 text-rose-600 font-black text-[10px] px-2.5 py-1 rounded uppercase tracking-wider">En attente</span>`;
 
-                const div = document.createElement('div');
-                div.className = `p-3 rounded border mb-3 ${idx===0 ? 'bg-indigo-50 border-indigo-200' : 'bg-gray-50 border-gray-200'}`;
-                div.innerHTML = `
-                    <div class="flex justify-between items-center border-b border-gray-200 pb-2 mb-2">
-                        <span class="font-bold text-gray-800">${f.patient}</span>
-                        <span class="text-xs text-gray-500">${new Date(f.date).toLocaleDateString()}</span>
+            // Style de la boîte de total en bas
+            const boxClass = resteAPayer > 0 ? "bg-rose-50 border border-rose-200" : "bg-emerald-50 border border-emerald-200";
+            const boxTextLeftClass = resteAPayer > 0 ? "text-rose-800" : "text-emerald-800";
+            const boxTextRightClass = resteAPayer > 0 ? "text-rose-700" : "text-emerald-700";
+            const boxLabel = resteAPayer > 0 ? "RESTE À PAYER" : "FACTURE SOLDÉE";
+
+            // NOUVEAU : Bloc HTML conditionnel pour le motif de rejet
+            const rejetHtml = fse.isRejet 
+                ? `<div class="bg-red-50 border-l-4 border-red-500 p-3 mt-3 rounded-r shadow-sm">
+                       <h4 class="text-red-800 font-black text-xs uppercase tracking-wider mb-1">⚠️ Facture Rejetée</h4>
+                       <p class="text-red-700 text-sm font-semibold">${fse.motifRejet || 'Aucun motif précisé'}</p>
+                   </div>` 
+                : '';
+
+            const html = `
+                <div class="flex flex-col gap-4 p-1">
+                    <!-- Patient -->
+                    <div class="flex justify-between items-center mt-2">
+                        <div class="text-[11px] font-bold text-gray-400 uppercase tracking-wide">Patient</div>
+                        <div class="text-xl font-black text-gray-800">${fse.patient}</div>
                     </div>
-                    <div class="grid grid-cols-2 gap-4 text-sm">
-                        <div class="bg-white p-2 rounded shadow-sm">
-                            <span class="font-bold text-teal-700 block">Part RO: ${f.partRO}€</span>
-                            ${infoRO}
+
+                    <hr class="border-gray-100 my-1">
+
+                    <!-- Date & Praticien -->
+                    <div class="flex justify-between items-start">
+                        <div>
+                           <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-1">Date</div>
+                           <div class="font-bold text-gray-800 text-[15px]">${new Date(fse.date).toLocaleDateString('fr-FR')}</div>
                         </div>
-                        <div class="bg-white p-2 rounded shadow-sm">
-                            <span class="font-bold text-indigo-700 block">Part RC: ${f.partRC}€</span>
-                            ${infoRC}
+                        <div class="text-right">
+                           <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-1">Praticien</div>
+                           <div class="font-bold text-gray-800 text-[15px]">${fse.praticien}</div>
                         </div>
                     </div>
-                `;
-                contentDiv.appendChild(div);
-            });
+
+                    <!-- Encart Bleu : Infos de la facture -->
+                    <div class="bg-indigo-50/40 border border-indigo-100/60 rounded-xl p-4 flex flex-col gap-5 mt-2 shadow-sm">
+                        <div class="flex justify-between items-start">
+                            <div>
+                               <div class="text-[10px] font-bold text-indigo-400 uppercase tracking-wider mb-1">N° FSE</div>
+                               <div class="font-mono text-indigo-700 font-bold text-[15px]">${fse.numFSE}</div>
+                            </div>
+                            <div class="text-right">
+                               <div class="text-[10px] font-bold text-indigo-400 uppercase tracking-wider mb-1">Lot</div>
+                               <div class="font-mono text-gray-700 font-bold">${fse.lot || '-'}</div>
+                            </div>
+                        </div>
+                        <div class="flex justify-between items-start">
+                            <div>
+                               <div class="text-[10px] font-bold text-indigo-400 uppercase tracking-wider mb-1">Caisse</div>
+                               <div class="font-bold text-gray-700 uppercase">${fse.caisse || '-'}</div>
+                            </div>
+                            <div class="text-right">
+                               <div class="text-[10px] font-bold text-indigo-400 uppercase tracking-wider mb-1">Mutuelle</div>
+                               <div class="font-bold text-gray-700 uppercase">${fse.mutuelle || '-'}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Lignes des montants -->
+                    <div class="flex flex-col gap-4 px-1 mt-3">
+                        <div class="flex justify-between items-center">
+                            <div class="font-bold text-gray-600 text-sm">Part RO <span class="font-medium text-gray-400 ml-1">(${fse.partRO.toFixed(2)} €)</span></div>
+                            <div>${badgeRO}</div>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <div class="font-bold text-gray-600 text-sm">Part RC <span class="font-medium text-gray-400 ml-1">(${fse.partRC.toFixed(2)} €)</span></div>
+                            <div>${badgeRC}</div>
+                        </div>
+                    </div>
+
+                    <!-- Reste à payer -->
+                    <div class="${boxClass} rounded-xl p-4 flex justify-between items-center mt-3 mb-1 shadow-sm">
+                        <div class="text-[11px] font-bold ${boxTextLeftClass} uppercase tracking-wider">${boxLabel}</div>
+                        <div class="text-xl font-black ${boxTextRightClass}">${resteAPayer.toFixed(2)} €</div>
+                    </div>
+                    
+                    <!-- Affichage du motif de rejet à la fin -->
+                    ${rejetHtml}
+                </div>
+            `;
+            document.getElementById('fseDetailsContent').innerHTML = html;
             document.getElementById('fseDetailsModal').classList.remove('hidden');
         }
         function closeFseDetailsModal() { document.getElementById('fseDetailsModal').classList.add('hidden'); }
